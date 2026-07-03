@@ -173,6 +173,12 @@ export class JobStore {
       .slice(0, limit);
   }
 
+  latestTerminal() {
+    return [...this.jobs.values()]
+      .filter((job) => TERMINAL_STATES.has(job.status))
+      .sort((a, b) => String(b.endedAt || b.updatedAt || b.createdAt).localeCompare(String(a.endedAt || a.updatedAt || a.createdAt)))[0] || null;
+  }
+
   latestCompletedForWorkspace(cwd) {
     return [...this.jobs.values()]
       .filter((job) => job.cwd === cwd && job.status === "completed" && job.threadId)

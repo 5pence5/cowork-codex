@@ -11,7 +11,7 @@ Rules:
 
 - Preserve returned bridge job ids and Codex thread ids.
 - Prefer host paths for `cwd`; if Cowork has a `/sessions/<user>/mnt/...` path, pass it through and let the bridge map it.
-- For same-workspace edits, use one write-capable Codex job at a time.
+- For overlapping same-file edits, use one write-capable Codex job at a time.
 - Read-only review jobs can run concurrently.
 - Use the configured default profile unless the work is inspection-only.
 - Pass an explicitly supplied `--profile` through to the MCP tool.

@@ -219,7 +219,7 @@ process.exit(1);
     return `loggedIn=${setup.codex.loginStatus.loggedIn}`;
   });
 
-  await expect("codex setup probes use scrubbed child env", async () => {
+  await expect("codex setup probes use limited child env", async () => {
     const fakeCodex = join(tempRoot, "fake-codex-setup-env.mjs");
     await writeFile(fakeCodex, `#!/usr/bin/env node
 const forbidden = ["OPENAI_API_KEY", "CODEX_EXTRA", "GITHUB_TOKEN"].filter((name) => process.env[name]);
@@ -254,7 +254,7 @@ process.exit(1);
     });
     if (!setup.codex.version.ok) throw new Error(`version failed: ${setup.codex.version.text}`);
     if (!setup.codex.loginStatus.loggedIn) throw new Error("login status did not use fake logged-in output");
-    if (setup.childProcess.envPolicy !== "codex setup probes use the same scrubbed child environment as Codex jobs") {
+    if (setup.childProcess.envPolicy !== "codex setup probes use the same limited child environment as Codex jobs") {
       throw new Error(`unexpected env policy: ${setup.childProcess.envPolicy}`);
     }
     return setup.childProcess.envPolicy;
@@ -887,10 +887,15 @@ setInterval(() => {}, 1000);
   let toolNames = [];
   await expect("tools/list", async () => {
     const response = await send("tools/list");
-    toolNames = response.result?.tools?.map((tool) => tool.name).sort() || [];
+    const tools = response.result?.tools || [];
+    toolNames = tools.map((tool) => tool.name).sort();
     const expected = ["codex_cancel_job", "codex_delegate", "codex_job_result", "codex_job_status", "codex_set_max_concurrent_jobs", "codex_setup", "codex_start_review", "codex_start_task"].sort();
     for (const name of expected) {
       if (!toolNames.includes(name)) throw new Error(`missing ${name}`);
+    }
+    const resultTool = tools.find((tool) => tool.name === "codex_job_result");
+    if (resultTool?.inputSchema?.required?.includes("id")) {
+      throw new Error("codex_job_result still requires id");
     }
     return toolNames.join(", ");
   });
@@ -909,7 +914,7 @@ setInterval(() => {}, 1000);
     if (process.platform === "darwin" && !setup.childProcess?.path?.includes("/opt/homebrew/bin")) {
       throw new Error(`child PATH missing Homebrew fallback: ${setup.childProcess?.path}`);
     }
-    if (!setup.childProcess?.envPolicy?.includes("same scrubbed child environment")) throw new Error(`missing child env policy: ${setup.childProcess?.envPolicy}`);
+    if (!setup.childProcess?.envPolicy?.includes("same limited child environment")) throw new Error(`missing child env policy: ${setup.childProcess?.envPolicy}`);
     if (setup.localConfig.path !== tempConfig) throw new Error("temporary config not used");
     return setup.codex.version.text;
   });
@@ -1003,6 +1008,15 @@ setInterval(() => {}, 1000);
     return message;
   });
 
+  await expect("bare codex_job_result reports no terminal job", async () => {
+    const response = await callTool("codex_job_result", {}, 30000);
+    const message = response.result?.structuredContent?.error?.message || "";
+    if (!response.result?.isError || !message.includes("No completed, failed, cancelled, or rejected Codex job")) {
+      throw new Error(`expected MCP isError no terminal job, got ${JSON.stringify(response)}`);
+    }
+    return message;
+  });
+
   let cancelJobId = null;
   await expect("codex_delegate cancel target", async () => {
     const response = await callTool("codex_delegate", {
@@ -1031,6 +1045,14 @@ setInterval(() => {}, 1000);
     return `${result.status}/${result.phase}`;
   });
 
+  await expect("bare codex_job_result returns latest terminal job", async () => {
+    const response = await callTool("codex_job_result", {});
+    const result = data(response);
+    if (result.id !== cancelJobId) throw new Error(`expected latest terminal ${cancelJobId}, got ${result.id}`);
+    if (result.status !== "cancelled") throw new Error(`expected cancelled result, got ${result.status}`);
+    return result.id;
+  });
+
   let completedJobId = null;
   let completedThreadId = null;
   await expect("codex_start_task real job", async () => {
@@ -1056,6 +1078,17 @@ setInterval(() => {}, 1000);
       throw new Error(`final message did not include BRIDGE_OK: ${JSON.stringify(result.finalMessage)}`);
     }
     return result.threadId || "no-thread-id";
+  });
+
+  await expect("bare codex_job_result returns completed job", async () => {
+    if (!completedJobId) throw new Error("real job did not complete");
+    const response = await callTool("codex_job_result", {});
+    const result = data(response);
+    if (result.id !== completedJobId) throw new Error(`expected latest terminal ${completedJobId}, got ${result.id}`);
+    if (!String(result.finalMessage || "").includes("BRIDGE_OK")) {
+      throw new Error(`final message did not include BRIDGE_OK: ${JSON.stringify(result.finalMessage)}`);
+    }
+    return result.id;
   });
 
   let resumedThreadId = null;

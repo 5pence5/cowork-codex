@@ -319,7 +319,7 @@ export async function collectCodexSetup(env = process.env) {
     },
     childProcess: {
       path: pathEnvValue(childEnv),
-      envPolicy: "codex setup probes use the same scrubbed child environment as Codex jobs"
+      envPolicy: "codex setup probes use the same limited child environment as Codex jobs"
     },
     localConfig,
     warnings,

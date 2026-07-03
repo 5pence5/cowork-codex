@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.9 - 2026-07-03
+
+- Added bare `/result` support by letting `codex_job_result` return the latest terminal Codex job when no id is supplied.
+- Added selftest coverage for bare result lookup and the optional `codex_job_result.id` schema.
+- Made Cowork validation config-path wording platform-aware without ignoring config overrides.
+- Narrowed parallel-edit guidance to overlapping same-file edits.
+- Replaced remaining user-facing setup wording with `limited child environment`.
+
 ## 0.1.8 - 2026-07-03
 
 - Reshaped README usage docs to match the OpenAI Codex Claude Code plugin tone and structure.

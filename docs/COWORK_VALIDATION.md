@@ -24,10 +24,10 @@ Use this checklist after installing or updating the plugin in Claude Cowork.
 3. Confirm Codex resolves to the expected host binary.
 4. Confirm Codex reports the expected version.
 5. Confirm Codex is logged in.
-6. Confirm `localConfig.path` points at `~/.config/cowork-codex/cowork-codex.local.json`.
+6. Confirm `localConfig.path` points at the configured or default local config path. Defaults are `~/.config/cowork-codex/cowork-codex.local.json` on Linux/macOS or `%APPDATA%\cowork-codex\cowork-codex.local.json` on Windows.
 7. Confirm `localConfig.maxConcurrentJobs` is the expected active-job cap.
 8. Confirm `childProcess.path` includes the tool locations needed by your projects.
-9. Confirm `childProcess.envPolicy` says setup probes use the same child environment as Codex jobs.
+9. Confirm `childProcess.envPolicy` says setup probes use the same limited child environment as Codex jobs.
 
 ## Concurrency Config
 

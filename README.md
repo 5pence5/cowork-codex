@@ -183,11 +183,12 @@ Examples:
 
 ### `/result`
 
-Shows the final stored Codex output for a finished job. When available, it includes the Codex session id so you can reopen that run directly in Codex.
+Shows the final stored Codex output for a finished job. Without an id, it returns the latest completed, failed, cancelled, or rejected job. When available, it includes the Codex session id so you can reopen that run directly in Codex.
 
 Examples:
 
 ```bash
+/result
 /result job-abc123
 ```
 

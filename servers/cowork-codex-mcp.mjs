@@ -8,7 +8,7 @@ import { cancelActiveJobs, cancelJob, createRunnerContext, REVIEW_ENGINE, startC
 
 const SERVER_INFO = {
   name: "cowork-codex",
-  version: "0.1.8"
+  version: "0.1.9"
 };
 const PROTOCOL_VERSION = "2025-06-18";
 
@@ -122,10 +122,9 @@ const TOOLS = [
   },
   {
     name: "codex_job_result",
-    description: "Return the final agent message verbatim with log paths, thread id, and usage.",
+    description: "Return the final agent message verbatim with log paths, thread id, and usage. When id is omitted, return the latest terminal job.",
     inputSchema: {
       type: "object",
-      required: ["id"],
       properties: {
         id: { type: "string", minLength: 1 }
       },
@@ -355,8 +354,10 @@ async function callTool(name, args) {
       };
     }
     case "codex_job_result": {
-      const job = jobStore.get(args.id);
-      if (!job) throw new Error(`Unknown job id: ${args.id}`);
+      const job = args.id ? jobStore.get(args.id) : jobStore.latestTerminal();
+      if (!job) {
+        throw new Error(args.id ? `Unknown job id: ${args.id}` : "No completed, failed, cancelled, or rejected Codex job was found.");
+      }
       return {
         id: job.id,
         status: job.status,
