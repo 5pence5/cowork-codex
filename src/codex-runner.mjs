@@ -21,7 +21,7 @@ const REVIEW_SCOPES = new Set(["auto", "working-tree", "branch"]);
 
 export const REVIEW_ENGINE = {
   path: "codex exec review",
-  reason: "`codex exec review --help` is available locally and supports --json, --base, --commit, and --model. The bridge uses it for standard review; critical review uses a structured prompt via codex exec --json so it can preserve focus text and check design assumptions."
+  reason: "`codex exec review --help` is available locally and supports --json, --base, --commit, and --model. The bridge uses it for standard review when no focus text is supplied; focused standard review and critical review use a structured prompt via codex exec --json so focus text is preserved."
 };
 
 function sleep(ms) {
@@ -310,7 +310,7 @@ export async function prepareJob(ctx, input) {
 export async function startCodexJob(ctx, input) {
   const prepared = await prepareJob(ctx, input);
   const { job, codexPath, resumeThreadId, reviewSelection } = prepared;
-  const reviewSubcommand = input.type === "review" && input.reviewMode === "standard";
+  const reviewSubcommand = input.type === "review" && input.reviewMode === "standard" && !input.focus;
   const prompt = input.type === "review"
     ? (reviewSubcommand ? (input.focus || "") : buildReviewPrompt({
       mode: input.reviewMode,
@@ -347,6 +347,11 @@ export async function startCodexJob(ctx, input) {
     return tracked;
   };
 
+  const currentBeforeStart = ctx.jobStore.get(job.id) || job;
+  if (ctx.jobStore.isTerminal(currentBeforeStart)) {
+    return currentBeforeStart;
+  }
+
   await ctx.jobStore.update(job.id, {
     status: "running",
     phase: "process.starting",
@@ -356,6 +361,11 @@ export async function startCodexJob(ctx, input) {
     argsPreview: redactCodexArgs(args),
     reviewTarget: reviewSelection.label || null
   });
+
+  const currentBeforeSpawn = ctx.jobStore.get(job.id) || job;
+  if (ctx.jobStore.isTerminal(currentBeforeSpawn)) {
+    return currentBeforeSpawn;
+  }
 
   let proc;
   try {
@@ -387,6 +397,9 @@ export async function startCodexJob(ctx, input) {
     try {
       event = JSON.parse(line);
     } catch {
+      if (ctx.jobStore.isTerminal(current)) {
+        return;
+      }
       await ctx.jobStore.update(job.id, {
         phase: "non-json-output",
         recentItems: updateRecent(current, { type: "stdout", text: line.slice(0, 500), at: new Date().toISOString() })
@@ -394,6 +407,9 @@ export async function startCodexJob(ctx, input) {
       return;
     }
     await ctx.jobStore.appendRawEvent(current, event);
+    if (ctx.jobStore.isTerminal(current)) {
+      return;
+    }
     const patch = parseEventForPatch(current, event);
     await ctx.jobStore.update(job.id, patch);
   }

@@ -31,7 +31,8 @@ Requirements: macOS, Node.js 18 or newer, an authenticated Codex CLI on the host
 Copy the example config:
 
 ```bash
-cp .local/cowork-codex.local.json.example .local/cowork-codex.local.json
+mkdir -p ~/.config/cowork-codex
+cp .local/cowork-codex.local.json.example ~/.config/cowork-codex/cowork-codex.local.json
 ```
 
 Edit `cwdAllowlist` to include trusted Mac host folders:
@@ -47,7 +48,7 @@ Edit `cwdAllowlist` to include trusted Mac host folders:
 }
 ```
 
-The real `.local/` directory is gitignored. If the local config is missing, task and review jobs are denied until the allowlist is configured. Placeholder allowlist entries beginning with `<` are ignored, so the example file is safe to copy before editing.
+The installed plugin reads `~/.config/cowork-codex/cowork-codex.local.json` unless `COWORK_CODEX_LOCAL_CONFIG` is set. If the local config is missing, task and review jobs are denied until the allowlist is configured. Placeholder allowlist entries beginning with `<` are ignored, so the example file is safe to copy before editing.
 
 `cwdAllowlist` may point at the exact workspace or a trusted parent folder. For Cowork VM paths such as `/sessions/<user>/mnt/<workspace>`, the bridge first tries a host-absolute mapping and then maps the VM workspace basename back onto matching allowlisted host folders. If a VM path could map to more than one allowlisted host folder, the bridge rejects it and asks for a host-absolute Mac path or a narrower allowlist. Prefer exact workspace allowlist entries when possible.
 
@@ -59,7 +60,7 @@ For an installed Claude plugin, the MCP launcher reads:
 ~/.config/cowork-codex/cowork-codex.local.json
 ```
 
-The repository `.local/` file is only for direct development runs.
+The repository `.local/` directory is gitignored and is only for direct development runs when `COWORK_CODEX_LOCAL_CONFIG` points at it.
 
 ## Install
 
@@ -90,7 +91,7 @@ Plugin visibility:
 2. Use `/mcp` and confirm the `cowork-codex` server and six tools are visible.
 3. Call `codex_setup`.
 4. Confirm host proof reports Darwin/macOS, `homeConfigured: true`, and a resolved Codex CLI path.
-5. Confirm `codex_setup` warns if `.local/cowork-codex.local.json` is missing.
+5. Confirm `codex_setup` warns if `~/.config/cowork-codex/cowork-codex.local.json` is missing.
 
 Workspace sync sentinel:
 

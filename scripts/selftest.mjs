@@ -7,7 +7,7 @@ import readline from "node:readline";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 import { promisify } from "node:util";
-import { buildCodexChildEnv } from "../src/child-env.mjs";
+import { buildCodexChildEnv, buildCodexChildPath } from "../src/child-env.mjs";
 import { collectCodexSetup, firstExecutablePathLine, readLocalConfig } from "../src/codex-discovery.mjs";
 import { cancelJob, classifyError, codexArgsForJob, redactCodexArgs, resolveReviewSelection, startCodexJob, waitForJob } from "../src/codex-runner.mjs";
 import { defaultLogsDir, JobStore } from "../src/job-store.mjs";
@@ -18,6 +18,8 @@ const execFileAsync = promisify(execFile);
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
 const serverPath = resolve(root, "servers/cowork-codex-mcp.mjs");
+const packagePath = resolve(root, "package.json");
+const pluginManifestPath = resolve(root, ".claude-plugin", "plugin.json");
 
 const tempRoot = await mkdtemp(join(tmpdir(), "cowork-codex-selftest-"));
 const tempWorkspace = join(tempRoot, "workspace");
@@ -236,7 +238,19 @@ process.exit(1);
       if (name in env) throw new Error(`${name} leaked into child env`);
     }
     if (env.LC_ALL !== "C") throw new Error("LC_* should be preserved");
+    if (!env.PATH.includes("/opt/homebrew/bin")) throw new Error(`PATH missing Homebrew fallback: ${env.PATH}`);
+    if (!env.PATH.includes("/home/user/.npm-global/bin")) throw new Error(`PATH missing npm fallback: ${env.PATH}`);
     return Object.keys(env).sort().join(", ");
+  });
+
+  await expect("child PATH augments launchd-minimal path", async () => {
+    const path = buildCodexChildPath({ PATH: "/usr/bin:/bin", HOME: "/Users/example" });
+    const entries = path.split(":");
+    for (const required of ["/usr/bin", "/bin", "/opt/homebrew/bin", "/usr/local/bin", "/Users/example/.npm-global/bin"]) {
+      if (!entries.includes(required)) throw new Error(`missing ${required} in ${path}`);
+    }
+    if (entries.indexOf("/usr/bin") !== entries.lastIndexOf("/usr/bin")) throw new Error(`duplicate /usr/bin in ${path}`);
+    return path;
   });
 
   await expect("classifyError uses word boundaries", async () => {
@@ -268,7 +282,7 @@ process.exit(1);
   });
 
   await expect("resume argv uses resume-supported flags", async () => {
-    const args = codexArgsForJob({ sandbox: "read-only", cwd: "/tmp/x" }, {
+    const args = codexArgsForJob({ sandbox: "read-only", cwd: "/tmp/x", model: "gpt-5.5", effort: "high" }, {
       prompt: "RESUME_PROMPT",
       resumeThreadId: "019f0000-0000-7000-8000-000000000000"
     });
@@ -277,6 +291,8 @@ process.exit(1);
     const sessionIndex = args.indexOf("019f0000-0000-7000-8000-000000000000");
     const separatorIndex = args.lastIndexOf("--");
     if (sessionIndex === -1 || separatorIndex <= sessionIndex) throw new Error(`resume prompt separator misplaced: ${args.join(" ")}`);
+    if (!args.includes("--model") || !args.includes("gpt-5.5")) throw new Error(`resume model missing: ${args.join(" ")}`);
+    if (!args.includes('model_reasoning_effort="high"')) throw new Error(`resume effort missing: ${args.join(" ")}`);
     return args.join(" ");
   });
 
@@ -572,6 +588,124 @@ console.log(JSON.stringify({ type: "turn.completed", usage: { total_tokens: 1 } 
     return `${completed.id} ${completed.threadId}`;
   });
 
+  await expect("full-local-access profile maps to danger-full-access argv", async () => {
+    const fakeCodex = join(tempRoot, "fake-codex-full-local.mjs");
+    const fakeConfig = join(tempRoot, "fake-full-local-config.json");
+    await writeFile(fakeCodex, `#!/usr/bin/env node
+console.log(JSON.stringify({ type: "thread.started", thread_id: "fake-thread-full-local" }));
+console.log(JSON.stringify({ type: "turn.completed", usage: { total_tokens: 1 } }));
+`, "utf8");
+    await chmod(fakeCodex, 0o755);
+    await writeFile(fakeConfig, JSON.stringify({
+      defaultProfile: "workspace-write",
+      cwdAllowlist: [tempWorkspace],
+      codexBin: fakeCodex,
+      maxConcurrentJobs: 2
+    }), "utf8");
+    const store = new JobStore(tempRoot, { logsDir: join(tempRoot, "fake-full-local-logs") });
+    await store.init();
+    const job = await startCodexJob({
+      jobStore: store,
+      env: { ...process.env, CODEX_BIN: fakeCodex, COWORK_CODEX_LOCAL_CONFIG: fakeConfig }
+    }, {
+      type: "task",
+      prompt: "FULL_LOCAL_PROFILE_PROMPT",
+      cwd: tempWorkspace,
+      profile: "full-local-access"
+    });
+    const completed = await waitForJob(store, job.id, 10);
+    if (completed.status !== "completed") throw new Error(`full-local fake job ended ${completed.status}`);
+    if (completed.sandbox !== "danger-full-access") throw new Error(`sandbox was ${completed.sandbox}`);
+    const args = completed.argsPreview || [];
+    if (!args.includes("--sandbox") || !args.includes("danger-full-access")) {
+      throw new Error(`argsPreview missing danger-full-access: ${JSON.stringify(args)}`);
+    }
+    return args.join(" ");
+  });
+
+  await expect("concurrency cap rejects extra active job", async () => {
+    const fakeCodex = join(tempRoot, "fake-codex-slow.mjs");
+    const fakeConfig = join(tempRoot, "fake-concurrency-config.json");
+    await writeFile(fakeCodex, `#!/usr/bin/env node
+setTimeout(() => {
+  console.log(JSON.stringify({ type: "thread.started", thread_id: "fake-thread-slow" }));
+  console.log(JSON.stringify({ type: "turn.completed", usage: { total_tokens: 1 } }));
+}, 1500);
+`, "utf8");
+    await chmod(fakeCodex, 0o755);
+    await writeFile(fakeConfig, JSON.stringify({
+      defaultProfile: "workspace-write",
+      cwdAllowlist: [tempWorkspace],
+      codexBin: fakeCodex,
+      maxConcurrentJobs: 1
+    }), "utf8");
+    const store = new JobStore(tempRoot, { logsDir: join(tempRoot, "fake-concurrency-logs") });
+    await store.init();
+    const first = await startCodexJob({
+      jobStore: store,
+      env: { ...process.env, CODEX_BIN: fakeCodex, COWORK_CODEX_LOCAL_CONFIG: fakeConfig }
+    }, {
+      type: "task",
+      prompt: "FIRST_CONCURRENCY_PROMPT",
+      cwd: tempWorkspace,
+      profile: "read-only"
+    });
+    let message = "";
+    try {
+      await startCodexJob({
+        jobStore: store,
+        env: { ...process.env, CODEX_BIN: fakeCodex, COWORK_CODEX_LOCAL_CONFIG: fakeConfig }
+      }, {
+        type: "task",
+        prompt: "SECOND_CONCURRENCY_PROMPT",
+        cwd: tempWorkspace,
+        profile: "read-only"
+      });
+    } catch (error) {
+      message = error.message;
+    }
+    if (!message.includes("Concurrency cap reached")) throw new Error(`unexpected concurrency result: ${message}`);
+    const completed = await waitForJob(store, first.id, 10);
+    if (completed.status !== "completed") throw new Error(`first job ended ${completed.status}`);
+    return message;
+  });
+
+  await expect("cancelled job is not overwritten by late output", async () => {
+    const fakeCodex = join(tempRoot, "fake-codex-cancel-race.mjs");
+    const fakeConfig = join(tempRoot, "fake-cancel-race-config.json");
+    await writeFile(fakeCodex, `#!/usr/bin/env node
+process.on("SIGTERM", () => {
+  console.log(JSON.stringify({ type: "thread.started", thread_id: "fake-thread-cancel-race" }));
+  console.log(JSON.stringify({ type: "turn.completed", usage: { total_tokens: 1 } }));
+  setTimeout(() => process.exit(0), 25);
+});
+setInterval(() => {}, 1000);
+`, "utf8");
+    await chmod(fakeCodex, 0o755);
+    await writeFile(fakeConfig, JSON.stringify({
+      defaultProfile: "workspace-write",
+      cwdAllowlist: [tempWorkspace],
+      codexBin: fakeCodex,
+      maxConcurrentJobs: 2
+    }), "utf8");
+    const store = new JobStore(tempRoot, { logsDir: join(tempRoot, "fake-cancel-race-logs") });
+    await store.init();
+    const job = await startCodexJob({
+      jobStore: store,
+      env: { ...process.env, CODEX_BIN: fakeCodex, COWORK_CODEX_LOCAL_CONFIG: fakeConfig }
+    }, {
+      type: "task",
+      prompt: "CANCEL_RACE_PROMPT",
+      cwd: tempWorkspace,
+      profile: "read-only"
+    });
+    await cancelJob(store, job.id);
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 500));
+    const final = store.get(job.id);
+    if (final.status !== "cancelled") throw new Error(`late output changed status to ${final.status}/${final.phase}`);
+    return `${final.status}/${final.phase}`;
+  });
+
   await expect("spawn errors mark job failed", async () => {
     const fakeCodexDir = join(tempRoot, "fake-codex-directory");
     const fakeConfig = join(tempRoot, "fake-spawn-error-config.json");
@@ -607,7 +741,13 @@ console.log(JSON.stringify({ type: "turn.completed", usage: { total_tokens: 1 } 
     });
     notify("notifications/initialized");
     if (response.result?.serverInfo?.name !== "cowork-codex") throw new Error("serverInfo mismatch");
-    return response.result.protocolVersion;
+    const pkg = JSON.parse(await readFile(packagePath, "utf8"));
+    const manifest = JSON.parse(await readFile(pluginManifestPath, "utf8"));
+    const serverVersion = response.result?.serverInfo?.version;
+    if (serverVersion !== pkg.version || serverVersion !== manifest.version) {
+      throw new Error(`version mismatch server=${serverVersion} package=${pkg.version} manifest=${manifest.version}`);
+    }
+    return `${response.result.protocolVersion} ${serverVersion}`;
   });
 
   let toolNames = [];
@@ -632,6 +772,7 @@ console.log(JSON.stringify({ type: "turn.completed", usage: { total_tokens: 1 } 
       throw new Error("loginStatus includes unredacted output");
     }
     if (!setup.codex.resolvedPath) throw new Error("no Codex path");
+    if (!setup.childProcess?.path?.includes("/opt/homebrew/bin")) throw new Error(`child PATH missing fallback: ${setup.childProcess?.path}`);
     if (setup.localConfig.path !== tempConfig) throw new Error("temporary config not used");
     return setup.codex.version.text;
   });
@@ -657,6 +798,18 @@ console.log(JSON.stringify({ type: "turn.completed", usage: { total_tokens: 1 } 
     return response.error.message;
   });
 
+  await expect("input validation rejects empty prompt", async () => {
+    const response = await callTool("codex_start_task", {
+      prompt: "",
+      cwd: tempWorkspace,
+      profile: "read-only"
+    }, 30000);
+    if (response.error?.code !== -32602 || !response.error.message.includes("prompt")) {
+      throw new Error(`expected -32602 prompt error, got ${JSON.stringify(response)}`);
+    }
+    return response.error.message;
+  });
+
   await expect("input validation rejects review base plus commit", async () => {
     const response = await callTool("codex_start_review", {
       cwd: tempWorkspace,
@@ -665,6 +818,14 @@ console.log(JSON.stringify({ type: "turn.completed", usage: { total_tokens: 1 } 
     }, 30000);
     if (response.error?.code !== -32602 || !response.error.message.includes("either base or commit")) {
       throw new Error(`expected -32602 base/commit error, got ${JSON.stringify(response)}`);
+    }
+    return response.error.message;
+  });
+
+  await expect("input validation rejects status wait without id", async () => {
+    const response = await callTool("codex_job_status", { wait_seconds: 1 }, 30000);
+    if (response.error?.code !== -32602 || !response.error.message.includes("wait_seconds requires id")) {
+      throw new Error(`expected -32602 wait/id error, got ${JSON.stringify(response)}`);
     }
     return response.error.message;
   });
@@ -798,7 +959,8 @@ console.log(JSON.stringify({ type: "turn.completed", usage: { total_tokens: 1 } 
     const response = await callTool("codex_start_review", {
       cwd: tempReviewWorkspace,
       mode: "standard",
-      scope: "working-tree"
+      scope: "working-tree",
+      focus: "Focus only on review-target.js and the changed arithmetic."
     }, 240000);
     const started = data(response).job;
     standardReviewId = started.id;

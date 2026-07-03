@@ -8,7 +8,7 @@ import { cancelJob, createRunnerContext, REVIEW_ENGINE, startCodexJob, waitForJo
 
 const SERVER_INFO = {
   name: "cowork-codex",
-  version: "0.1.0"
+  version: "0.1.1"
 };
 const PROTOCOL_VERSION = "2025-06-18";
 
@@ -44,8 +44,8 @@ const TOOLS = [
       type: "object",
       required: ["prompt", "cwd"],
       properties: {
-        prompt: { type: "string" },
-        cwd: { type: "string" },
+        prompt: { type: "string", minLength: 1 },
+        cwd: { type: "string", minLength: 1 },
         profile: { type: "string", enum: PROFILE_VALUES, description: "Permission profile. full-local-access is never a default; use it only when the user explicitly asks for that job." },
         model: { type: "string", description: "Optional Codex model id. Must match ^[A-Za-z0-9._:-]+$." },
         effort: { type: "string", enum: EFFORT_VALUES },
@@ -62,12 +62,12 @@ const TOOLS = [
       type: "object",
       required: ["cwd"],
       properties: {
-        cwd: { type: "string" },
+        cwd: { type: "string", minLength: 1 },
         mode: { type: "string", enum: ["standard", "critical"] },
         base: { type: "string", description: "Optional base ref. Must match ^[A-Za-z0-9._/-]+$." },
         commit: { type: "string", description: "Optional commit/ref. Must match ^[A-Za-z0-9._/-]+$." },
         scope: { type: "string", enum: REVIEW_SCOPE_VALUES, description: "Review target selection when base/commit are omitted." },
-        focus: { type: "string" },
+        focus: { type: "string", minLength: 1 },
         model: { type: "string", description: "Optional Codex model id. Must match ^[A-Za-z0-9._:-]+$." },
         effort: { type: "string", enum: EFFORT_VALUES },
         ...commonWait
@@ -81,7 +81,7 @@ const TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
-        id: { type: "string" },
+        id: { type: "string", minLength: 1 },
         ...commonWait
       },
       additionalProperties: false
@@ -94,7 +94,7 @@ const TOOLS = [
       type: "object",
       required: ["id"],
       properties: {
-        id: { type: "string" }
+        id: { type: "string", minLength: 1 }
       },
       additionalProperties: false
     }
@@ -106,7 +106,7 @@ const TOOLS = [
       type: "object",
       required: ["id"],
       properties: {
-        id: { type: "string" }
+        id: { type: "string", minLength: 1 }
       },
       additionalProperties: false
     }
@@ -206,8 +206,14 @@ function validateToolArguments(tool, args) {
     if (spec.type === "string" && typeof value !== "string") {
       return `${field} must be a string`;
     }
+    if (spec.type === "string" && spec.minLength && value.length < spec.minLength) {
+      return `${field} must be at least ${spec.minLength} character${spec.minLength === 1 ? "" : "s"}`;
+    }
     if (spec.type === "number" && typeof value !== "number") {
       return `${field} must be a number`;
+    }
+    if (spec.type === "number" && !Number.isFinite(value)) {
+      return `${field} must be finite`;
     }
     if (spec.enum && !spec.enum.includes(value)) {
       return `${field} must be one of ${spec.enum.join(", ")}`;
@@ -219,6 +225,9 @@ function validateToolArguments(tool, args) {
   }
   if (tool.name === "codex_start_review" && args.base && args.commit) {
     return "Use either base or commit, not both.";
+  }
+  if (tool.name === "codex_job_status" && !args.id && "wait_seconds" in args) {
+    return "wait_seconds requires id for codex_job_status.";
   }
   return null;
 }

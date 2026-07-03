@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { buildCodexChildPath } from "./child-env.mjs";
 
 const execFileAsync = promisify(execFile);
 const TESTED_CODEX_VERSION = "codex-cli 0.142.5";
@@ -235,7 +236,7 @@ export async function collectCodexSetup(env = process.env) {
   }
   warnings.push(...(localConfig.warnings || []));
   if (localConfig.source === "missing") {
-    warnings.push(`Local config is missing. Copy .local/cowork-codex.local.json.example to ${localConfig.path} and set cwdAllowlist before running task or review jobs.`);
+    warnings.push(`Local config is missing. Copy the example config to ${localConfig.path} and set cwdAllowlist before running task or review jobs.`);
   }
 
   return {
@@ -263,6 +264,9 @@ export async function collectCodexSetup(env = process.env) {
     node: {
       version: process.version,
       execPath: process.execPath
+    },
+    childProcess: {
+      path: buildCodexChildPath(env)
     },
     localConfig,
     warnings,
