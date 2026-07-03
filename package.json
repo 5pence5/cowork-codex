@@ -1,0 +1,15 @@
+{
+  "name": "cowork-codex",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Claude Cowork plugin bridge for host-side Codex delegation.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "check": "node --check servers/cowork-codex-mcp.mjs && node --check scripts/selftest.mjs",
+    "selftest": "node scripts/selftest.mjs"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "defaultProfile": "workspace-write",
+  "cwdAllowlist": [
+    "<trusted-host-workspace>"
+  ],
+  "codexBin": null,
+  "maxConcurrentJobs": 2,
+  "notes": "Copy this file to cowork-codex.local.json for machine-specific settings. Placeholder allowlist entries beginning with < are ignored. defaultProfile accepts read-only or workspace-write; workspace-write matches the Codex Claude plugin write-capable rescue default. full-local-access is per-job opt-in only. The real .local directory is gitignored."
+}
