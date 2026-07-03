@@ -9,7 +9,7 @@ import { dirname } from "node:path";
 import { promisify } from "node:util";
 import { buildCodexChildEnv, buildCodexChildPath } from "../src/child-env.mjs";
 import { collectCodexSetup, firstExecutablePathLine, readLocalConfig } from "../src/codex-discovery.mjs";
-import { cancelJob, classifyError, codexArgsForJob, redactCodexArgs, resolveReviewSelection, startCodexJob, waitForJob } from "../src/codex-runner.mjs";
+import { cancelActiveJobs, cancelJob, classifyError, codexArgsForJob, redactCodexArgs, resolveReviewSelection, startCodexJob, waitForJob } from "../src/codex-runner.mjs";
 import { defaultLogsDir, JobStore } from "../src/job-store.mjs";
 import { mapAndValidateCwd } from "../src/path-map.mjs";
 
@@ -215,6 +215,46 @@ process.exit(1);
     if (setup.codex.loginStatus.loggedIn) throw new Error("Not logged in was parsed as logged in");
     if (setup.codex.loginStatus.method !== null) throw new Error(`unexpected method ${setup.codex.loginStatus.method}`);
     return `loggedIn=${setup.codex.loginStatus.loggedIn}`;
+  });
+
+  await expect("codex setup probes use scrubbed child env", async () => {
+    const fakeCodex = join(tempRoot, "fake-codex-setup-env.mjs");
+    await writeFile(fakeCodex, `#!/usr/bin/env node
+const forbidden = ["OPENAI_API_KEY", "CODEX_EXTRA", "GITHUB_TOKEN"].filter((name) => process.env[name]);
+if (forbidden.length) {
+  console.error("forbidden env leaked: " + forbidden.join(","));
+  process.exit(3);
+}
+if (!String(process.env.PATH || "").includes("/opt/homebrew/bin")) {
+  console.error("child PATH was not augmented");
+  process.exit(4);
+}
+if (process.argv[2] === "--version") {
+  console.log("codex-cli 0.142.5");
+  process.exit(0);
+}
+if (process.argv[2] === "login" && process.argv[3] === "status") {
+  console.log("Logged in using ChatGPT");
+  process.exit(0);
+}
+process.exit(1);
+`, "utf8");
+    await chmod(fakeCodex, 0o755);
+    const setup = await collectCodexSetup({
+      ...process.env,
+      PATH: "/usr/bin:/bin",
+      CODEX_BIN: fakeCodex,
+      COWORK_CODEX_LOCAL_CONFIG: tempConfig,
+      OPENAI_API_KEY: "drop-me",
+      CODEX_EXTRA: "drop-me",
+      GITHUB_TOKEN: "drop-me"
+    });
+    if (!setup.codex.version.ok) throw new Error(`version failed: ${setup.codex.version.text}`);
+    if (!setup.codex.loginStatus.loggedIn) throw new Error("login status did not use fake logged-in output");
+    if (setup.childProcess.envPolicy !== "codex setup probes use the same scrubbed child environment as Codex jobs") {
+      throw new Error(`unexpected env policy: ${setup.childProcess.envPolicy}`);
+    }
+    return setup.childProcess.envPolicy;
   });
 
   await expect("child env drops broad CODEX variables", async () => {
@@ -530,7 +570,7 @@ process.exit(1);
     }
   });
 
-  await expect("orphan sweep preserves jobs owned by live server", async () => {
+  await expect("orphan sweep does not trust stored live owner pid", async () => {
     const store = new JobStore(tempRoot, { logsDir: join(tempRoot, "live-owner-logs") });
     await store.init();
     const job = await store.create({
@@ -543,11 +583,10 @@ process.exit(1);
     });
     await store.update(job.id, { status: "running", phase: "process.started", ownerPid: process.pid, pid: null });
     await store.sweepOrphans();
-    const preserved = store.get(job.id);
-    if (preserved.status !== "running") throw new Error(`live-owned job was swept as ${preserved.status}`);
-    if (store.activeCount() !== 1) throw new Error(`live-owned active count was ${store.activeCount()}`);
-    await store.update(job.id, { status: "failed", phase: "test.cleaned-up", endedAt: new Date().toISOString() });
-    return `ownerPid ${preserved.ownerPid}`;
+    const swept = store.get(job.id);
+    if (swept.status !== "failed" || swept.phase !== "orphaned") throw new Error(`live owner pid was trusted as ${swept.status}/${swept.phase}`);
+    if (store.activeCount() !== 0) throw new Error(`orphan remained active: ${store.activeCount()}`);
+    return `ownerPid ${swept.ownerPid} marked ${swept.phase}`;
   });
 
   await expect("fake Codex fast close completes and prompt is not logged", async () => {
@@ -706,6 +745,42 @@ setInterval(() => {}, 1000);
     return `${final.status}/${final.phase}`;
   });
 
+  await expect("shutdown cancels active live jobs", async () => {
+    const fakeCodex = join(tempRoot, "fake-codex-shutdown-cancel.mjs");
+    const fakeConfig = join(tempRoot, "fake-shutdown-cancel-config.json");
+    await writeFile(fakeCodex, `#!/usr/bin/env node
+process.on("SIGTERM", () => setTimeout(() => process.exit(0), 25));
+setInterval(() => {}, 1000);
+`, "utf8");
+    await chmod(fakeCodex, 0o755);
+    await writeFile(fakeConfig, JSON.stringify({
+      defaultProfile: "workspace-write",
+      cwdAllowlist: [tempWorkspace],
+      codexBin: fakeCodex,
+      maxConcurrentJobs: 2
+    }), "utf8");
+    const store = new JobStore(tempRoot, { logsDir: join(tempRoot, "fake-shutdown-cancel-logs") });
+    await store.init();
+    const job = await startCodexJob({
+      jobStore: store,
+      env: { ...process.env, CODEX_BIN: fakeCodex, COWORK_CODEX_LOCAL_CONFIG: fakeConfig }
+    }, {
+      type: "task",
+      prompt: "SHUTDOWN_CANCEL_PROMPT",
+      cwd: tempWorkspace,
+      profile: "workspace-write"
+    });
+    const cancelled = await cancelActiveJobs(store, "TEST_SHUTDOWN");
+    if (cancelled.length !== 1) throw new Error(`cancelled ${cancelled.length} jobs`);
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 200));
+    const final = store.get(job.id);
+    if (final.status !== "cancelled" || final.phase !== "cancelled.shutdown") {
+      throw new Error(`shutdown left ${final.status}/${final.phase}`);
+    }
+    if (final.errorMessage !== "TEST_SHUTDOWN") throw new Error(`unexpected reason: ${final.errorMessage}`);
+    return `${final.status}/${final.phase}`;
+  });
+
   await expect("spawn errors mark job failed", async () => {
     const fakeCodexDir = join(tempRoot, "fake-codex-directory");
     const fakeConfig = join(tempRoot, "fake-spawn-error-config.json");
@@ -773,6 +848,7 @@ setInterval(() => {}, 1000);
     }
     if (!setup.codex.resolvedPath) throw new Error("no Codex path");
     if (!setup.childProcess?.path?.includes("/opt/homebrew/bin")) throw new Error(`child PATH missing fallback: ${setup.childProcess?.path}`);
+    if (!setup.childProcess?.envPolicy?.includes("same scrubbed child environment")) throw new Error(`missing child env policy: ${setup.childProcess?.envPolicy}`);
     if (setup.localConfig.path !== tempConfig) throw new Error("temporary config not used");
     return setup.codex.version.text;
   });
@@ -873,6 +949,14 @@ setInterval(() => {}, 1000);
     const job = data(response).job;
     if (job.status !== "cancelled") throw new Error(`expected cancelled, got ${job.status}`);
     return job.id;
+  });
+
+  await expect("codex_job_result includes phase for cancelled job", async () => {
+    const response = await callTool("codex_job_result", { id: cancelJobId });
+    const result = data(response);
+    if (result.status !== "cancelled") throw new Error(`expected cancelled result, got ${result.status}`);
+    if (!result.phase) throw new Error(`missing phase: ${JSON.stringify(result)}`);
+    return `${result.status}/${result.phase}`;
   });
 
   let completedJobId = null;

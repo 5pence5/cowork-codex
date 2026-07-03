@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { buildCodexChildPath } from "./child-env.mjs";
+import { buildCodexChildEnv, buildCodexChildPath } from "./child-env.mjs";
 
 const execFileAsync = promisify(execFile);
 const TESTED_CODEX_VERSION = "codex-cli 0.142.5";
@@ -90,7 +90,12 @@ export async function resolveCodexBinary(env = process.env, localConfig = null) 
     }
   }
 
-  const shellResult = await run("/bin/zsh", ["-lc", "command -v codex"], { env });
+  const shellResult = await run("/bin/zsh", ["-lc", "command -v codex"], {
+    env: {
+      ...env,
+      PATH: buildCodexChildPath(env)
+    }
+  });
   const shellPath = shellResult.ok ? await firstExecutablePathLine(shellResult.stdout) : "";
   const shellStdoutLineCount = shellResult.stdout ? shellResult.stdout.split(/\r?\n/).filter(Boolean).length : 0;
   const shellOk = Boolean(shellPath);
@@ -215,10 +220,11 @@ export async function readLocalConfig(configPath) {
 export async function collectCodexSetup(env = process.env) {
   const localConfig = await readLocalConfig(localConfigPath(env));
   const codexResolution = await resolveCodexBinary(env, localConfig);
+  const childEnv = buildCodexChildEnv(env);
 
   const [codexVersion, loginStatus] = await Promise.all([
-    codexResolution.path ? run(codexResolution.path, ["--version"], { env }) : Promise.resolve({ ok: false, stdout: "", stderr: "codex not found", exitCode: null }),
-    codexResolution.path ? run(codexResolution.path, ["login", "status"], { env }) : Promise.resolve({ ok: false, stdout: "", stderr: "codex not found", exitCode: null })
+    codexResolution.path ? run(codexResolution.path, ["--version"], { env: childEnv }) : Promise.resolve({ ok: false, stdout: "", stderr: "codex not found", exitCode: null }),
+    codexResolution.path ? run(codexResolution.path, ["login", "status"], { env: childEnv }) : Promise.resolve({ ok: false, stdout: "", stderr: "codex not found", exitCode: null })
   ]);
 
   const versionText = codexVersion.stdout || codexVersion.stderr;
@@ -266,7 +272,8 @@ export async function collectCodexSetup(env = process.env) {
       execPath: process.execPath
     },
     childProcess: {
-      path: buildCodexChildPath(env)
+      path: childEnv.PATH,
+      envPolicy: "codex setup probes use the same scrubbed child environment as Codex jobs"
     },
     localConfig,
     warnings,

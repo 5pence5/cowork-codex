@@ -131,7 +131,7 @@ async function main() {
     await writeJson(options.configPath, config, false);
   }
 
-  await run("claude", ["plugin", "validate", root], options);
+  await run("claude", ["plugin", "validate", "--strict", root], options);
 
   if (!options.skipPluginInstall) {
     await run("claude", ["plugin", "marketplace", "add", root], options);
@@ -141,7 +141,7 @@ async function main() {
   console.log("");
   console.log("Cowork Codex install step complete.");
   console.log(`Config: ${options.configPath}`);
-  console.log("Next: reload plugins in Cowork, run /mcp, then call codex_setup.");
+  console.log("Next: run /reload-plugins in Cowork, run /mcp, then call codex_setup.");
 }
 
 try {

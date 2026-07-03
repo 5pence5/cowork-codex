@@ -44,9 +44,9 @@ claude plugin marketplace add git@github.com:5pence5/cowork-codex.git
 claude plugin install cowork-codex@cowork-codex --scope user
 ```
 
-While the repo is private, the marketplace add command requires GitHub access to `5pence5/cowork-codex`.
+While the repo is private, the SSH marketplace command requires GitHub access to `5pence5/cowork-codex`, a loaded SSH key, and GitHub in `known_hosts`. After public release, a GitHub shorthand such as `claude plugin marketplace add 5pence5/cowork-codex` should also work.
 
-Reload plugins, then verify the `cowork-codex` MCP server and six tools are visible with `/mcp`.
+Run `/reload-plugins`, then verify the `cowork-codex` MCP server and six tools are visible with `/mcp`.
 
 See [docs/INSTALL.md](docs/INSTALL.md) for clone-based install, dry-run, multiple-workspace, custom Codex binary, config-only, and manual install options.
 
@@ -120,7 +120,7 @@ Local checks:
 ```bash
 npm run check
 npm run selftest
-claude plugin validate "$PWD"
+claude plugin validate --strict "$PWD"
 ```
 
 The selftest starts the MCP server with a temporary local config and allowlisted workspace, checks all tools, verifies config/env/path/lifecycle regressions, runs live Codex task/resume/review jobs, verifies result retrieval, checks cancellation, and verifies outside-cwd rejection.

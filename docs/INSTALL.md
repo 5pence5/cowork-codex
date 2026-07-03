@@ -25,9 +25,9 @@ claude plugin marketplace add git@github.com:5pence5/cowork-codex.git
 claude plugin install cowork-codex@cowork-codex --scope user
 ```
 
-While this repo is private, the marketplace add command requires GitHub access to `5pence5/cowork-codex`.
+While this repo is private, the SSH marketplace command requires GitHub access to `5pence5/cowork-codex`, a loaded SSH key, and GitHub in `known_hosts`. After public release, a GitHub shorthand such as `claude plugin marketplace add 5pence5/cowork-codex` should also work.
 
-Then reload plugins in Cowork, run `/mcp`, and call `codex_setup`.
+Then run `/reload-plugins` in Cowork, run `/mcp`, and call `codex_setup`.
 
 ## Clone-Based Install
 
@@ -41,11 +41,13 @@ The installer:
 
 1. Creates or updates `~/.config/cowork-codex/cowork-codex.local.json`.
 2. Writes the supplied `--allowlist` path into `cwdAllowlist`.
-3. Runs `claude plugin validate`.
+3. Runs `claude plugin validate --strict`.
 4. Adds this checkout as a Claude plugin marketplace.
 5. Installs `cowork-codex@cowork-codex` for the current user.
 
-Then reload plugins in Cowork, run `/mcp`, and call `codex_setup`.
+The clone installer registers this checkout under marketplace name `cowork-codex`. If you already added the GitHub marketplace with the same name, the local checkout becomes the active source until you remove and re-add the GitHub marketplace.
+
+Then run `/reload-plugins` in Cowork, run `/mcp`, and call `codex_setup`.
 
 ## Multiple Workspaces
 
@@ -86,7 +88,7 @@ npm run install:cowork -- --allowlist "$PWD" --skip-plugin-install
 ```bash
 mkdir -p ~/.config/cowork-codex
 cp .local/cowork-codex.local.json.example ~/.config/cowork-codex/cowork-codex.local.json
-claude plugin validate "$PWD"
+claude plugin validate --strict "$PWD"
 claude plugin marketplace add "$PWD"
 claude plugin install cowork-codex@cowork-codex --scope user
 ```
@@ -105,3 +107,14 @@ claude plugin install cowork-codex@cowork-codex --scope user
 ```
 
 The config file under `~/.config/cowork-codex/cowork-codex.local.json` is not plugin data and is preserved by those commands.
+
+## Switching Back From a Local Clone to GitHub
+
+If a clone-based install replaced the GitHub marketplace source, switch back with:
+
+```bash
+claude plugin uninstall cowork-codex@cowork-codex --scope user --keep-data
+claude plugin marketplace remove cowork-codex
+claude plugin marketplace add git@github.com:5pence5/cowork-codex.git
+claude plugin install cowork-codex@cowork-codex --scope user
+```

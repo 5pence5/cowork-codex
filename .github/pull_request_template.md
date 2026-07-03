@@ -4,7 +4,6 @@
 
 - [ ] `npm run check`
 - [ ] `npm run selftest`
-- [ ] `claude plugin validate "$PWD"`
+- [ ] `claude plugin validate --strict "$PWD"`
 
 ## Notes
-

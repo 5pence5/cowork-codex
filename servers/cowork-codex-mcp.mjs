@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { collectCodexSetup } from "../src/codex-discovery.mjs";
 import { JobStore } from "../src/job-store.mjs";
-import { cancelJob, createRunnerContext, REVIEW_ENGINE, startCodexJob, waitForJob } from "../src/codex-runner.mjs";
+import { cancelActiveJobs, cancelJob, createRunnerContext, REVIEW_ENGINE, startCodexJob, waitForJob } from "../src/codex-runner.mjs";
 
 const SERVER_INFO = {
   name: "cowork-codex",
@@ -308,6 +308,7 @@ async function callTool(name, args) {
       return {
         id: job.id,
         status: job.status,
+        phase: job.phase,
         finalMessage: job.finalMessage || "",
         logs: job.logs,
         threadId: job.threadId,
@@ -376,6 +377,24 @@ async function handleRequest(message) {
 }
 
 const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
+let shuttingDown = false;
+
+async function shutdown(reason, exitCode = 0) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  const hardExit = setTimeout(() => process.exit(exitCode), 3000);
+  hardExit.unref();
+  try {
+    const cancelled = await cancelActiveJobs(jobStore, reason);
+    if (cancelled.length) log(`cancelled ${cancelled.length} active job(s) during shutdown`);
+    await writeQueue.catch(() => {});
+  } catch (shutdownError) {
+    log("shutdown error", shutdownError);
+    process.exitCode = exitCode || 1;
+  } finally {
+    process.exit(exitCode);
+  }
+}
 
 rl.on("line", async (line) => {
   if (!line.trim()) return;
@@ -398,12 +417,20 @@ rl.on("line", async (line) => {
   }
 });
 
-rl.on("close", () => log("stdio closed"));
+rl.on("close", () => {
+  void shutdown("MCP stdio closed", 0);
+});
+process.on("SIGTERM", () => {
+  void shutdown("MCP server received SIGTERM", 143);
+});
+process.on("SIGINT", () => {
+  void shutdown("MCP server received SIGINT", 130);
+});
 process.on("uncaughtException", (err) => {
   log("uncaught exception", err);
-  process.exitCode = 1;
+  void shutdown("MCP server hit an uncaught exception", 1);
 });
 process.on("unhandledRejection", (err) => {
   log("unhandled rejection", err);
-  process.exitCode = 1;
+  void shutdown("MCP server hit an unhandled rejection", 1);
 });

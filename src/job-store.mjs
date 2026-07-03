@@ -16,16 +16,6 @@ function elapsedMs(job) {
   return Number.isFinite(start) ? Math.max(0, end - start) : 0;
 }
 
-function pidAlive(pid) {
-  if (!pid) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function makeJobId() {
   const rand = Math.random().toString(36).slice(2, 8);
   return `job-${Date.now().toString(36)}-${rand}`;
@@ -88,9 +78,6 @@ export class JobStore {
   async sweepOrphans() {
     for (const job of this.jobs.values()) {
       if (RUNNING_STATES.has(job.status)) {
-        if (job.ownerPid && pidAlive(job.ownerPid)) {
-          continue;
-        }
         await this.update(job.id, {
           status: "failed",
           phase: "orphaned",

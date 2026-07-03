@@ -20,7 +20,7 @@ rm -rf ~/.local/state/cowork-codex/logs
 
 ## Restarted Jobs
 
-If the MCP server restarts while a Codex job is active, the bridge marks the stored job orphaned. It does not signal stored PIDs after restart because PID reuse can make that unsafe. A Codex process that survived the restart may continue independently.
+On normal MCP shutdown or plugin reload, the server cancels live active jobs through their process handles before exit. If the server later loads a stored active job without a live handle, the bridge marks it orphaned. It does not signal stored PIDs after restart because PID reuse can make that unsafe. A Codex process that survived an abnormal termination may continue independently.
 
 ## Plugin Distribution
 
@@ -29,4 +29,3 @@ The current release path is a local Claude plugin checkout or tracked-source zip
 ## Broad Local Access
 
 `full-local-access` is available only as an explicit per-job profile. It cannot be configured as the default.
-

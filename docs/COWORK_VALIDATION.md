@@ -4,7 +4,7 @@ Use this checklist after installing or updating the plugin in Claude Cowork.
 
 ## Plugin Visibility
 
-1. Enable or reload the plugin.
+1. Run `/reload-plugins`.
 2. Run `/mcp`.
 3. Confirm the `cowork-codex` server is visible.
 4. Confirm these tools are visible:
@@ -24,6 +24,7 @@ Use this checklist after installing or updating the plugin in Claude Cowork.
 5. Confirm Codex is logged in.
 6. Confirm `localConfig.path` points at `~/.config/cowork-codex/cowork-codex.local.json`.
 7. Confirm `childProcess.path` includes the tool locations needed by your projects.
+8. Confirm `childProcess.envPolicy` says setup probes use the same child environment as Codex jobs.
 
 ## Path Mapping
 
@@ -63,4 +64,3 @@ Confirm the file appears on the Mac host and Cowork sees it.
 2. Cancel it with `codex_cancel_job`.
 3. Confirm final status is `cancelled`.
 4. Confirm no child process continues doing work in the target repo.
-

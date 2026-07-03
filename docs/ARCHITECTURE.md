@@ -45,7 +45,7 @@ Ambiguous VM paths are rejected with an actionable error. This avoids silently c
 
 `src/codex-runner.mjs` prepares a job, resolves Codex, creates a job record, starts the Codex child process, parses JSON events, and records final status.
 
-`src/job-store.mjs` stores append-only JSONL job records plus stdout, stderr, and event logs. Restarted active jobs are marked orphaned without signalling stale stored PIDs.
+`src/job-store.mjs` stores append-only JSONL job records plus stdout, stderr, and event logs. On normal MCP shutdown, the server cancels live active jobs through their process handles before exit. Restarted active jobs loaded without a live handle are marked orphaned without signalling stale stored PIDs.
 
 ## Profiles
 
@@ -57,5 +57,4 @@ Review jobs force read-only behavior.
 
 ## Child Environment
 
-`src/child-env.mjs` passes a narrow environment to Codex, preserving only basic shell/user/locale values and `CODEX_HOME`. It augments `PATH` with common macOS and user npm locations so Codex jobs can find tools when launched from a minimal plugin environment.
-
+`src/child-env.mjs` passes a narrow environment to Codex, preserving only basic shell/user/locale values and `CODEX_HOME`. It augments `PATH` with common macOS and user npm locations so Codex jobs can find tools when launched from a minimal plugin environment. `codex_setup` probes Codex with the same child environment used by real jobs.

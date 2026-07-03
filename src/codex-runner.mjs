@@ -498,20 +498,24 @@ export async function waitForJob(jobStore, id, waitSeconds = 0) {
   return job;
 }
 
-export async function cancelJob(jobStore, id) {
+export async function cancelJob(jobStore, id, options = {}) {
   const job = jobStore.get(id);
   if (!job) throw new Error(`Unknown job id: ${id}`);
   const proc = jobStore.getProcess(id);
   if (jobStore.isTerminal(job)) {
     return job;
   }
+  const phase = options.phase || "cancelled";
+  const reason = options.reason || null;
   if (!proc) {
     return jobStore.update(id, {
       status: "cancelled",
-      phase: "cancelled.no-live-handle",
+      phase: `${phase}.no-live-handle`,
       endedAt: new Date().toISOString(),
       errorKind: null,
-      errorMessage: job.pid
+      errorMessage: reason
+        ? `${reason}; no live process handle was available.`
+        : job.pid
         ? "No live process handle was available; the stored child pid was not signalled."
         : "Job was not running when cancel was requested."
     });
@@ -526,10 +530,10 @@ export async function cancelJob(jobStore, id) {
   }, 2000).unref();
   return jobStore.update(id, {
     status: "cancelled",
-    phase: "cancelled",
+    phase,
     endedAt: new Date().toISOString(),
     errorKind: null,
-    errorMessage: null
+    errorMessage: reason
   });
 }
 
@@ -552,4 +556,19 @@ function killPid(pid, signal) {
       return false;
     }
   }
+}
+
+export async function cancelActiveJobs(jobStore, reason = "MCP server is shutting down") {
+  const active = jobStore.activeJobs();
+  const results = [];
+  for (const job of active) {
+    results.push(await cancelJob(jobStore, job.id, {
+      phase: "cancelled.shutdown",
+      reason
+    }));
+  }
+  if (active.length) {
+    await sleep(2200);
+  }
+  return results;
 }
