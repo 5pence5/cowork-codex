@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3 - 2026-07-03
+
+- Added a Cowork-native `codex-prompting` skill for compact, block-structured Codex task handoffs through `/delegate` and `codex_start_task`.
+- Added `/delegate` as the task handoff command for the primary Fable use case: delegating research and implementation while conserving Cowork context and tokens.
+- Clarified that Cowork task prompts should preserve bridge permission profiles, resume semantics, and non-overlapping write scopes instead of copying Claude Code plugin internals wholesale.
+
 ## 0.1.2 - 2026-07-03
 
 - Changed the default active Codex job cap to 8, matching the hard cap.

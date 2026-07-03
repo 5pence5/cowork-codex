@@ -1,8 +1,8 @@
 # Cowork Codex
 
-Cowork Codex gives Fable in Claude Cowork a Codex implementation and research subagent: the Codex CLI already installed and authenticated on your Mac. Cowork coordinates; Codex researches, implements, reviews, and reports back, only inside folders you allowlist.
+Cowork Codex gives Fable in Claude Cowork a Codex research and implementation subagent: the Codex CLI already installed and authenticated on your Mac. Fable coordinates; Codex researches, implements, reviews, and reports back, only inside folders you allowlist.
 
-Use it to hand off longer implementation, research, or review work to Codex while keeping the main Cowork thread lighter and conserving context and tokens.
+Use it to delegate research and implementation work to Codex while keeping the main Cowork thread lighter and conserving context and tokens.
 
 It is designed for the Cowork host/VM split: Codex runs on the Mac where it is already authenticated, while Cowork can start tasks, reviews, resumes, and cancellations through a bundled stdio MCP server.
 
@@ -10,12 +10,14 @@ It is designed for the Cowork host/VM split: Codex runs on the Mac where it is a
 
 The 0.1.x line is compatibility-first. It intentionally keeps the user-facing workflow close to the OpenAI Codex Claude Code plugin where that maps cleanly to Cowork: setup, task handoff, review, resume, status, result retrieval, cancellation, and background jobs.
 
-It is not a byte-for-byte port of the Claude Code plugin internals. The OpenAI plugin uses Claude Code agents, hooks, and internal skills such as `codex-cli-runtime`, `codex-result-handling`, and `gpt-5-4-prompting`. Cowork Codex uses a Cowork-native MCP bridge plus a Cowork-specific skill because the core problem is the Cowork host/VM boundary.
+It is not a byte-for-byte port of the Claude Code plugin internals. The OpenAI plugin uses Claude Code agents, hooks, and internal skills such as `codex-cli-runtime`, `codex-result-handling`, and `gpt-5-4-prompting`. Cowork Codex uses a Cowork-native MCP bridge plus Cowork-specific skills because the core problem is the Cowork host/VM boundary.
+
+Cowork Codex does include a `codex-prompting` skill. It adapts the OpenAI plugin's operator-style, block-structured prompting pattern for Cowork handoffs to current Codex models, including GPT-5.5.
 
 Current deliberate differences:
 
 - `/concurrency` is Cowork-specific.
-- `/transfer`, review-gate hooks, and the Claude Code `codex:codex-rescue` agent are not included in this release.
+- `/transfer`, review-gate hooks, and the Claude Code `codex:codex-rescue` agent are not included in this release. Review-gate hooks are not planned for 0.1.x because Cowork does not expose an equivalent stop-hook surface.
 - `/critical-review` covers the challenge-review use case, but it is MCP-native rather than a direct copy of `/codex:adversarial-review`.
 
 Future versions can move beyond compatibility with richer job grouping, named subagents, research workflows, conflict-aware write coordination, and higher-level task planning.
@@ -23,13 +25,14 @@ Future versions can move beyond compatibility with richer job grouping, named su
 ## Features
 
 - Host-side Codex discovery, version, login, config, and active-job diagnostics through `codex_setup`.
-- Background or foreground Codex task jobs through `codex_start_task`.
+- Background or foreground Codex research and implementation jobs through `codex_start_task` and `/delegate`.
 - Standard and critical read-only review jobs through `codex_start_review`.
 - Job polling, result retrieval, and cancellation through `codex_job_status`, `codex_job_result`, and `codex_cancel_job`.
 - Multiple active Codex jobs, bounded by `maxConcurrentJobs` (`8` by default, clamped from `1` to `8`).
 - Cowork-visible concurrency tuning through `codex_set_max_concurrent_jobs` and `/concurrency`.
+- Cowork-native `codex-prompting` skill for compact, block-structured implementation, research, and diagnosis handoffs.
 - Cowork `/sessions/<session>/mnt/...` path mapping to trusted Mac host folders.
-- `workspace-write` default for implementation/rescue work, with broad local access available only as an explicit per-job profile.
+- `workspace-write` default for implementation and delegation work, with broad local access available only as an explicit per-job profile.
 - Local JSONL/stdout/stderr job logs under the user's state directory.
 
 ## Trust And Permissions
@@ -120,7 +123,7 @@ Fields:
 ## Permission Profiles
 
 - `read-only`: for inspection and review.
-- `workspace-write`: default for implementation/rescue work.
+- `workspace-write`: default for implementation and delegation work.
 - `full-local-access`: explicit per-job opt-in only.
 
 Reviews force read-only behavior. `full-local-access` cannot be configured as the default.
@@ -138,6 +141,8 @@ The plugin exposes these MCP tools:
 - `codex_cancel_job`
 
 The bundled slash commands in `commands/` are thin instructions around those tools.
+
+For `/delegate` and direct `codex_start_task` use, Cowork should shape non-trivial prompts with the bundled `codex-prompting` skill before handing them to host Codex.
 
 Typical flow:
 

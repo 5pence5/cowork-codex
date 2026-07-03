@@ -5,7 +5,7 @@ description: Use host Codex from Claude Cowork through the cowork-codex MCP brid
 
 # Cowork Codex Workflow
 
-Use the bridge MCP tools when Cowork needs Codex as a second reviewer, research worker, rescue worker, or parallel implementation lane.
+Use the bridge MCP tools when Fable needs Codex as a research worker, implementation worker, second reviewer, or parallel delegation lane.
 
 Rules:
 
@@ -15,6 +15,7 @@ Rules:
 - Read-only review jobs are safe to run concurrently.
 - Use the default `workspace-write` profile unless the work is inspection-only or the user explicitly requests another profile.
 - Use `full-local-access` only when the user deliberately asks for it.
+- Use `codex-prompting` before `codex_start_task` when the user request is broad, multi-step, write-capable, research-heavy, or likely to need verification.
 - Use separate Codex jobs for parallel lanes.
 - Use `codex_job_status` with bounded `wait_seconds` rather than tight polling loops.
 - Use `codex_job_result` for final output and return Codex output verbatim unless the user asks for a summary.

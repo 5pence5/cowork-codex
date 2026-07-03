@@ -1,7 +1,7 @@
 {
   "name": "cowork-codex",
-  "version": "0.1.2",
-  "description": "Expose host Codex as Cowork-accessible implementation and research tools.",
+  "version": "0.1.3",
+  "description": "Expose host Codex as Cowork-accessible research and implementation tools.",
   "license": "MIT",
   "author": {
     "name": "5pence5"
