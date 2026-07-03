@@ -1,5 +1,6 @@
 .local/*
 !.local/*.example
 logs/
+dist/
 .DS_Store
 node_modules/
