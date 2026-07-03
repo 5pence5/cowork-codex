@@ -1,8 +1,8 @@
 # Limitations
 
-## macOS First
+## macOS Host Only
 
-The plugin is built for Claude Cowork on a Mac host. The launcher and path assumptions are macOS-oriented.
+The 0.1.x plugin is built for Claude Cowork on a Mac host. The launcher and path assumptions are macOS-oriented.
 
 ## Manual Sync Discipline
 

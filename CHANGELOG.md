@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.6 - 2026-07-03
+
+- Added a concise unofficial-community-plugin disclaimer for public release.
+- Made the macOS-host-only scope more prominent in public-facing copy.
+- Removed the remaining public reference to model-specific internal prompting skill names.
+- Aligned plugin and marketplace descriptions with the Fable delegation and Cowork context-conservation use case.
+- Clarified `/review`, `/critical-review`, and `/delegate` command handoff instructions.
+
 ## 0.1.5 - 2026-07-03
 
 - Polished public release wording to foreground Cowork context conservation through Fable delegation.

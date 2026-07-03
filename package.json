@@ -1,9 +1,9 @@
 {
   "name": "cowork-codex",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "type": "module",
-  "description": "Claude Cowork plugin bridge for host-side Codex research and implementation.",
+  "description": "Claude Cowork plugin bridge for Fable to delegate Mac host Codex research and implementation.",
   "license": "MIT",
   "engines": {
     "node": ">=18"

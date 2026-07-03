@@ -8,7 +8,7 @@ import { cancelActiveJobs, cancelJob, createRunnerContext, REVIEW_ENGINE, startC
 
 const SERVER_INFO = {
   name: "cowork-codex",
-  version: "0.1.5"
+  version: "0.1.6"
 };
 const PROTOCOL_VERSION = "2025-06-18";
 

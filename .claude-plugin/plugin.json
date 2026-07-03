@@ -1,7 +1,7 @@
 {
   "name": "cowork-codex",
-  "version": "0.1.5",
-  "description": "Delegate host Codex research and implementation from Claude Cowork while keeping Cowork context lighter.",
+  "version": "0.1.6",
+  "description": "Let Fable delegate Mac host Codex research and implementation from Claude Cowork while keeping the main Cowork thread lighter.",
   "license": "MIT",
   "author": {
     "name": "5pence5"

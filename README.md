@@ -4,13 +4,17 @@ Cowork Codex gives Fable in Claude Cowork a Codex research and implementation su
 
 Use it to delegate research and implementation work to Codex while keeping the main Cowork thread lighter and conserving context and tokens.
 
+Cowork Codex is an unofficial community plugin and is not affiliated with OpenAI or Anthropic.
+
+Current 0.1.x releases target Claude Cowork on a macOS host.
+
 It is designed for the Cowork host/VM split: Codex runs on the Mac where it is already authenticated, while Cowork can start tasks, reviews, resumes, and cancellations through a bundled stdio MCP server.
 
 ## Release Scope
 
 The 0.1.x line is compatibility-first. It intentionally keeps the user-facing workflow close to the OpenAI Codex Claude Code plugin where that maps cleanly to Cowork: setup, task handoff, review, resume, status, result retrieval, cancellation, and background jobs.
 
-It is not a byte-for-byte port of the Claude Code plugin internals. The OpenAI plugin uses Claude Code agents, hooks, and internal skills such as `codex-cli-runtime`, `codex-result-handling`, and `gpt-5-4-prompting`. Cowork Codex uses a Cowork-native MCP bridge plus Cowork-specific skills because the core problem is the Cowork host/VM boundary.
+It is not a byte-for-byte port of the Claude Code plugin internals. The OpenAI plugin uses Claude Code-specific agent, hook, and internal skill surfaces. Cowork Codex uses a Cowork-native MCP bridge plus Cowork-specific skills because the core problem is the Cowork host/VM boundary.
 
 Cowork Codex does include a `codex-prompting` skill. It adapts the OpenAI plugin's operator-style, block-structured prompting pattern for Cowork handoffs to current configured Codex models.
 
