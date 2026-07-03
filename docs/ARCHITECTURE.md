@@ -37,6 +37,26 @@ The bridge denies task and review jobs when the config is missing or the allowli
 
 `maxConcurrentJobs` defaults to 8 and is clamped from 1 to 8. Cowork can change this host-local value through the `codex_set_max_concurrent_jobs` MCP tool or `/concurrency` command.
 
+## Compatibility Scope
+
+Cowork Codex 0.1.x mirrors the OpenAI Codex Claude Code plugin at the workflow level, not at the internal implementation level.
+
+| OpenAI Codex Claude Code plugin surface | Cowork Codex 0.1.x surface |
+| --- | --- |
+| Setup readiness check | `codex_setup`, `/setup` |
+| Task or rescue handoff | `codex_start_task`, `/rescue` |
+| Review | `codex_start_review`, `/review` |
+| Adversarial review | `/critical-review` as the MCP-native challenge-review path |
+| Status | `codex_job_status`, `/status` |
+| Result retrieval | `codex_job_result`, `/result` |
+| Cancellation | `codex_cancel_job`, `/cancel` |
+| Resume latest or explicit thread | `resume` on `codex_start_task`, routed by `/rescue` |
+| Transfer current Claude Code session into Codex | Not included in 0.1.x |
+| Review gate hooks | Not included in 0.1.x |
+| Internal skills and Claude Code rescue agent | Replaced by a Cowork-specific skill and MCP tool schemas |
+
+This keeps the first release focused on making host-side Codex reliable from Cowork before adding Cowork-native orchestration that can go beyond the original plugin.
+
 ## Path Mapping
 
 `src/path-map.mjs` normalizes allowlist roots with `realpath`, builds candidate host paths from Cowork VM paths, and accepts a cwd only if it resolves inside exactly one allowlisted root.
