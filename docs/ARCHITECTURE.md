@@ -13,7 +13,7 @@ Claude Cowork
 
 ## Host And Cowork Boundary
 
-Codex auth stays on the Mac host. The Cowork VM may present paths such as `/sessions/<user>/mnt/<workspace>`, so the bridge maps those paths back onto trusted host folders before any Codex child process starts.
+Codex auth stays on the Mac host. The Cowork VM may present paths such as `/sessions/<session>/mnt/<workspace>`, so the bridge maps those paths back onto trusted host folders before any Codex child process starts.
 
 The MCP server is launched by `.mcp.json` through:
 

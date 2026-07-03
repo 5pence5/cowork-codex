@@ -29,7 +29,7 @@ Use this checklist after installing or updating the plugin in Claude Cowork.
 ## Path Mapping
 
 1. From Cowork, capture the current cwd.
-2. If it is a `/sessions/<user>/mnt/...` path, start a read-only Codex task using that cwd.
+2. If it is a `/sessions/<session>/mnt/...` path, start a read-only Codex task using that cwd.
 3. Confirm the returned job summary maps to the intended Mac host folder.
 4. Try the same operation with the explicit Mac host path and confirm it maps to the same folder.
 

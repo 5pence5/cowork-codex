@@ -22,9 +22,11 @@ rm -rf ~/.local/state/cowork-codex/logs
 
 On normal MCP shutdown or plugin reload, the server cancels live active jobs through their process handles before exit. If the server later loads a stored active job without a live handle, the bridge marks it orphaned. It does not signal stored PIDs after restart because PID reuse can make that unsafe. A Codex process that survived an abnormal termination may continue independently.
 
+The job store assumes one active Cowork Codex server per user state directory. Running two Cowork sessions against the same log directory at the same time can cause one server to mark the other's active jobs orphaned after reload.
+
 ## Plugin Distribution
 
-The current release path is a local Claude plugin checkout or tracked-source zip. There is no npm distribution or official marketplace submission yet.
+The current release path is adding this GitHub repo as a Claude plugin marketplace or installing from a tracked-source zip. There is no npm distribution or Anthropic-hosted marketplace listing yet.
 
 ## Broad Local Access
 

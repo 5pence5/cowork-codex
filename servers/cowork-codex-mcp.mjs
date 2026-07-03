@@ -384,15 +384,17 @@ async function shutdown(reason, exitCode = 0) {
   shuttingDown = true;
   const hardExit = setTimeout(() => process.exit(exitCode), 3000);
   hardExit.unref();
+  let finalExitCode = exitCode;
   try {
     const cancelled = await cancelActiveJobs(jobStore, reason);
     if (cancelled.length) log(`cancelled ${cancelled.length} active job(s) during shutdown`);
     await writeQueue.catch(() => {});
   } catch (shutdownError) {
     log("shutdown error", shutdownError);
-    process.exitCode = exitCode || 1;
+    finalExitCode = exitCode || 1;
+    process.exitCode = finalExitCode;
   } finally {
-    process.exit(exitCode);
+    process.exit(finalExitCode);
   }
 }
 

@@ -21,13 +21,12 @@ The selftest uses the local Codex CLI and includes live Codex task/review calls.
 Validate the Claude plugin manifest:
 
 ```bash
-claude plugin validate "$PWD"
+claude plugin validate --strict "$PWD"
 ```
 
 ## Pull Requests
 
 - Keep plugin behavior and docs in sync.
 - Update `CHANGELOG.md` for user-facing changes.
-- Bump `package.json`, `.claude-plugin/plugin.json`, and `SERVER_INFO.version` together when command/tool behavior changes.
+- Bump `package.json`, `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, and `SERVER_INFO.version` together when command/tool behavior changes.
 - Do not commit machine-local config files or job logs.
-

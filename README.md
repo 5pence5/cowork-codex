@@ -1,6 +1,8 @@
 # Cowork Codex
 
-Cowork Codex is a macOS Claude Cowork plugin that delegates work to the host Codex CLI through a bundled stdio MCP server. It is designed for the Cowork host/VM split: Codex runs on the Mac where it is already authenticated, while Cowork can start tasks, reviews, resumes, and cancellations through MCP tools.
+Cowork Codex gives Claude Cowork a second engineer: the Codex CLI already installed and authenticated on your Mac. Cowork coordinates; Codex implements, reviews, and reports back, only inside folders you allowlist.
+
+It is designed for the Cowork host/VM split: Codex runs on the Mac where it is already authenticated, while Cowork can start tasks, reviews, resumes, and cancellations through a bundled stdio MCP server.
 
 ## Features
 
@@ -8,9 +10,16 @@ Cowork Codex is a macOS Claude Cowork plugin that delegates work to the host Cod
 - Background or foreground Codex task jobs through `codex_start_task`.
 - Standard and critical read-only review jobs through `codex_start_review`.
 - Job polling, result retrieval, and cancellation through `codex_job_status`, `codex_job_result`, and `codex_cancel_job`.
-- Cowork `/sessions/<user>/mnt/...` path mapping to trusted Mac host folders.
+- Cowork `/sessions/<session>/mnt/...` path mapping to trusted Mac host folders.
 - `workspace-write` default for implementation/rescue work, with broad local access available only as an explicit per-job profile.
 - Local JSONL/stdout/stderr job logs under the user's state directory.
+
+## Trust And Permissions
+
+- Jobs run only inside folders listed in `cwdAllowlist`; paths are `realpath`-checked and ambiguous Cowork VM mappings are rejected.
+- The default task profile is `workspace-write`; broad local access is never a default and must be requested per job.
+- Review jobs are always read-only.
+- Codex jobs run with a narrow child environment, and local job logs are private to your user (`0700` directories, `0600` files).
 
 ## Requirements
 
@@ -40,13 +49,21 @@ JSON
 Add this repo as a Claude plugin marketplace and install the plugin:
 
 ```bash
-claude plugin marketplace add git@github.com:5pence5/cowork-codex.git
+claude plugin marketplace add 5pence5/cowork-codex
 claude plugin install cowork-codex@cowork-codex --scope user
 ```
 
-While the repo is private, the SSH marketplace command requires GitHub access to `5pence5/cowork-codex`, a loaded SSH key, and GitHub in `known_hosts`. After public release, a GitHub shorthand such as `claude plugin marketplace add 5pence5/cowork-codex` should also work.
+For private forks or private review, use the SSH form instead:
+
+```bash
+claude plugin marketplace add git@github.com:5pence5/cowork-codex.git
+```
+
+The SSH form requires repo access, a loaded SSH key, and GitHub in `known_hosts`.
 
 Run `/reload-plugins`, then verify the `cowork-codex` MCP server and six tools are visible with `/mcp`.
+
+You can install and run `codex_setup` before writing any config; task and review jobs stay disabled until `cwdAllowlist` contains at least one real folder.
 
 See [docs/INSTALL.md](docs/INSTALL.md) for clone-based install, dry-run, multiple-workspace, custom Codex binary, config-only, and manual install options.
 
@@ -80,7 +97,7 @@ Fields:
 - `codexBin`: optional absolute Codex binary path. Leave `null` to auto-discover.
 - `maxConcurrentJobs`: clamped from 1 to 8.
 
-`cwdAllowlist` may point at an exact workspace or a trusted parent folder. For Cowork VM paths such as `/sessions/<user>/mnt/<workspace>`, the bridge first tries host-absolute mapping and then maps the VM workspace basename back onto matching allowlisted host folders. Ambiguous mappings are rejected; use a host-absolute Mac path or narrow the allowlist.
+`cwdAllowlist` may point at an exact workspace or a trusted parent folder. For Cowork VM paths such as `/sessions/<session>/mnt/<workspace>`, the bridge first tries host-absolute mapping and then maps the VM workspace basename back onto matching allowlisted host folders. Ambiguous mappings are rejected; use a host-absolute Mac path or narrow the allowlist.
 
 ## Permission Profiles
 
