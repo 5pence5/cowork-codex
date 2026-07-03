@@ -9,6 +9,7 @@ Use this checklist after installing or updating the plugin in Claude Cowork.
 3. Confirm the `cowork-codex` server is visible.
 4. Confirm these tools are visible:
    - `codex_setup`
+   - `codex_set_max_concurrent_jobs`
    - `codex_start_task`
    - `codex_start_review`
    - `codex_job_status`
@@ -23,8 +24,16 @@ Use this checklist after installing or updating the plugin in Claude Cowork.
 4. Confirm Codex reports the expected version.
 5. Confirm Codex is logged in.
 6. Confirm `localConfig.path` points at `~/.config/cowork-codex/cowork-codex.local.json`.
-7. Confirm `childProcess.path` includes the tool locations needed by your projects.
-8. Confirm `childProcess.envPolicy` says setup probes use the same child environment as Codex jobs.
+7. Confirm `localConfig.maxConcurrentJobs` is the expected active-job cap.
+8. Confirm `childProcess.path` includes the tool locations needed by your projects.
+9. Confirm `childProcess.envPolicy` says setup probes use the same child environment as Codex jobs.
+
+## Concurrency Config
+
+1. Run `/concurrency 8`.
+2. Confirm the response reports `effectiveMaxConcurrentJobs: 8`.
+3. Run `codex_setup`.
+4. Confirm `localConfig.maxConcurrentJobs` is `8`.
 
 ## Path Mapping
 

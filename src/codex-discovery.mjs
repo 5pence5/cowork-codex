@@ -1,7 +1,7 @@
-import { access, readFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { buildCodexChildEnv, buildCodexChildPath } from "./child-env.mjs";
@@ -10,10 +10,10 @@ const execFileAsync = promisify(execFile);
 const TESTED_CODEX_VERSION = "codex-cli 0.142.5";
 const DEFAULT_LOCAL_CONFIG_PATH = join(homedir(), ".config", "cowork-codex", "cowork-codex.local.json");
 const DEFAULT_PROFILE_VALUES = new Set(["read-only", "workspace-write"]);
-const DEFAULT_MAX_CONCURRENT_JOBS = 2;
+const DEFAULT_MAX_CONCURRENT_JOBS = 8;
 const MAX_CONCURRENT_JOBS_LIMIT = 8;
 
-export { DEFAULT_LOCAL_CONFIG_PATH, TESTED_CODEX_VERSION };
+export { DEFAULT_LOCAL_CONFIG_PATH, DEFAULT_MAX_CONCURRENT_JOBS, MAX_CONCURRENT_JOBS_LIMIT, TESTED_CODEX_VERSION };
 
 async function isExecutable(path) {
   if (!path) return false;
@@ -139,7 +139,7 @@ function normalizeDefaultProfile(value, warnings) {
   return "workspace-write";
 }
 
-function normalizeMaxConcurrentJobs(value, warnings) {
+export function normalizeMaxConcurrentJobs(value, warnings = []) {
   if (value === undefined || value === null || value === "") return DEFAULT_MAX_CONCURRENT_JOBS;
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
@@ -152,6 +152,44 @@ function normalizeMaxConcurrentJobs(value, warnings) {
     warnings.push(`Clamped maxConcurrentJobs from ${String(value)} to ${clamped}.`);
   }
   return clamped;
+}
+
+export async function setLocalMaxConcurrentJobs(configPath, value) {
+  if (!configPath) throw new Error("No local config path is configured.");
+  const warnings = [];
+  const maxConcurrentJobs = normalizeMaxConcurrentJobs(value, warnings);
+  let parsed = {
+    defaultProfile: "workspace-write",
+    cwdAllowlist: [],
+    codexBin: null
+  };
+  let created = false;
+
+  try {
+    const raw = await readFile(configPath, "utf8");
+    const valueFromDisk = JSON.parse(raw);
+    if (!valueFromDisk || typeof valueFromDisk !== "object" || Array.isArray(valueFromDisk)) {
+      throw new Error("local config must be a JSON object");
+    }
+    parsed = valueFromDisk;
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      created = true;
+    } else {
+      throw error;
+    }
+  }
+
+  parsed.maxConcurrentJobs = maxConcurrentJobs;
+  await mkdir(dirname(configPath), { recursive: true });
+  await writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
+
+  return {
+    path: configPath,
+    created,
+    maxConcurrentJobs,
+    warnings
+  };
 }
 
 export async function readLocalConfig(configPath) {

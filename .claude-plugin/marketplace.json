@@ -3,7 +3,7 @@
   "name": "cowork-codex",
   "metadata": {
     "description": "Cowork-focused Codex delegation plugin for Claude.",
-    "version": "0.1.1"
+    "version": "0.1.2"
   },
   "owner": {
     "name": "5pence5"
@@ -12,7 +12,7 @@
     {
       "name": "cowork-codex",
       "description": "Use the Mac host Codex CLI from Claude Cowork for task delegation, review, resume, status, result retrieval, and cancellation.",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "author": {
         "name": "5pence5"
       },

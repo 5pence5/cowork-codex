@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { execFile } from "node:child_process";
 import readline from "node:readline";
 import { promisify } from "node:util";
-import { localConfigPath, readLocalConfig, resolveCodexBinary } from "./codex-discovery.mjs";
+import { DEFAULT_MAX_CONCURRENT_JOBS, localConfigPath, readLocalConfig, resolveCodexBinary } from "./codex-discovery.mjs";
 import { mapAndValidateCwd } from "./path-map.mjs";
 import { buildCodexChildEnv } from "./child-env.mjs";
 
@@ -286,7 +286,7 @@ export async function prepareJob(ctx, input) {
     ? await resolveReviewSelection(cwdInfo.cwd, { base: input.base, commit: input.commit, scope: input.scope })
     : {};
 
-  const max = localConfig.maxConcurrentJobs || 2;
+  const max = localConfig.maxConcurrentJobs || DEFAULT_MAX_CONCURRENT_JOBS;
   const active = ctx.jobStore.activeCount();
   if (active >= max) {
     throw new Error(`Concurrency cap reached: ${active}/${max} jobs are active. Wait for a job to finish or cancel one before starting another.`);

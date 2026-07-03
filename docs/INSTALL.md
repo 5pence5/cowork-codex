@@ -13,7 +13,7 @@ cat > ~/.config/cowork-codex/cowork-codex.local.json <<'JSON'
     "/absolute/path/to/trusted/workspace"
   ],
   "codexBin": null,
-  "maxConcurrentJobs": 2
+  "maxConcurrentJobs": 8
 }
 JSON
 ```
@@ -58,6 +58,18 @@ The installer:
 The clone installer registers this checkout under marketplace name `cowork-codex`. If you already added the GitHub marketplace with the same name, the local checkout becomes the active source until you remove and re-add the GitHub marketplace.
 
 Then run `/reload-plugins` in Cowork, run `/mcp`, and call `codex_setup`.
+
+## Concurrency
+
+The default active-job cap is 8. To set it during clone-based setup:
+
+```bash
+npm run install:cowork -- \
+  --allowlist /absolute/path/to/trusted/workspace \
+  --max-concurrent-jobs 8
+```
+
+To change it later from Cowork, run `/concurrency <1-8>`. You can also edit `maxConcurrentJobs` in `~/.config/cowork-codex/cowork-codex.local.json`.
 
 ## Multiple Workspaces
 

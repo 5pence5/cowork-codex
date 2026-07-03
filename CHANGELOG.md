@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2 - 2026-07-03
+
+- Changed the default active Codex job cap to 8, matching the hard cap.
+- Added `codex_set_max_concurrent_jobs` and `/concurrency` so Cowork can change the host-local active-job cap.
+- Added `npm run install:cowork -- --max-concurrent-jobs <n>` for clone-based setup.
+- Clarified that multiple active jobs act as parallel Codex implementation or review subagents with separate job ids, logs, and results.
+
 ## 0.1.1 - 2026-07-03
 
 - Added host-side Cowork Codex MCP bridge with setup, task, review, status, result, and cancel tools.

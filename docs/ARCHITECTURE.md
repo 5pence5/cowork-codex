@@ -35,6 +35,8 @@ Development runs may override this with `COWORK_CODEX_LOCAL_CONFIG`.
 
 The bridge denies task and review jobs when the config is missing or the allowlist is empty.
 
+`maxConcurrentJobs` defaults to 8 and is clamped from 1 to 8. Cowork can change this host-local value through the `codex_set_max_concurrent_jobs` MCP tool or `/concurrency` command.
+
 ## Path Mapping
 
 `src/path-map.mjs` normalizes allowlist roots with `realpath`, builds candidate host paths from Cowork VM paths, and accepts a cwd only if it resolves inside exactly one allowlisted root.
@@ -46,6 +48,8 @@ Ambiguous VM paths are rejected with an actionable error. This avoids silently c
 `src/codex-runner.mjs` prepares a job, resolves Codex, creates a job record, starts the Codex child process, parses JSON events, and records final status.
 
 `src/job-store.mjs` stores append-only JSONL job records plus stdout, stderr, and event logs. On normal MCP shutdown, the server cancels live active jobs through their process handles before exit. Restarted active jobs loaded without a live handle are marked orphaned without signalling stale stored PIDs.
+
+Each active task or review is a separate Codex CLI child process with its own job id, logs, and result. The bridge does not merge or coordinate simultaneous file edits across jobs.
 
 ## Profiles
 

@@ -1,6 +1,8 @@
 # Cowork Codex
 
-Cowork Codex gives Claude Cowork a second engineer: the Codex CLI already installed and authenticated on your Mac. Cowork coordinates; Codex implements, reviews, and reports back, only inside folders you allowlist.
+Cowork Codex gives Fable in Claude Cowork a Codex implementation subagent: the Codex CLI already installed and authenticated on your Mac. Cowork coordinates; Codex implements, reviews, and reports back, only inside folders you allowlist.
+
+Use it to hand off longer implementation or review work to Codex while keeping the main Cowork thread lighter and conserving context and tokens.
 
 It is designed for the Cowork host/VM split: Codex runs on the Mac where it is already authenticated, while Cowork can start tasks, reviews, resumes, and cancellations through a bundled stdio MCP server.
 
@@ -10,6 +12,8 @@ It is designed for the Cowork host/VM split: Codex runs on the Mac where it is a
 - Background or foreground Codex task jobs through `codex_start_task`.
 - Standard and critical read-only review jobs through `codex_start_review`.
 - Job polling, result retrieval, and cancellation through `codex_job_status`, `codex_job_result`, and `codex_cancel_job`.
+- Multiple active Codex jobs, bounded by `maxConcurrentJobs` (`8` by default, clamped from `1` to `8`).
+- Cowork-visible concurrency tuning through `codex_set_max_concurrent_jobs` and `/concurrency`.
 - Cowork `/sessions/<session>/mnt/...` path mapping to trusted Mac host folders.
 - `workspace-write` default for implementation/rescue work, with broad local access available only as an explicit per-job profile.
 - Local JSONL/stdout/stderr job logs under the user's state directory.
@@ -41,7 +45,7 @@ cat > ~/.config/cowork-codex/cowork-codex.local.json <<'JSON'
     "/absolute/path/to/trusted/workspace"
   ],
   "codexBin": null,
-  "maxConcurrentJobs": 2
+  "maxConcurrentJobs": 8
 }
 JSON
 ```
@@ -61,7 +65,7 @@ claude plugin marketplace add git@github.com:5pence5/cowork-codex.git
 
 The SSH form requires repo access, a loaded SSH key, and GitHub in `known_hosts`.
 
-Run `/reload-plugins`, then verify the `cowork-codex` MCP server and six tools are visible with `/mcp`.
+Run `/reload-plugins`, then verify the `cowork-codex` MCP server and tools are visible with `/mcp`.
 
 You can install and run `codex_setup` before writing any config; task and review jobs stay disabled until `cwdAllowlist` contains at least one real folder.
 
@@ -84,7 +88,7 @@ Example config:
     "/absolute/path/to/trusted/workspace"
   ],
   "codexBin": null,
-  "maxConcurrentJobs": 2
+  "maxConcurrentJobs": 8
 }
 ```
 
@@ -95,7 +99,7 @@ Fields:
 - `defaultProfile`: `read-only` or `workspace-write`. Unsupported values are ignored and the bridge uses `workspace-write`.
 - `cwdAllowlist`: trusted Mac host folders where jobs may run. Placeholder entries beginning with `<` are ignored.
 - `codexBin`: optional absolute Codex binary path. Leave `null` to auto-discover.
-- `maxConcurrentJobs`: clamped from 1 to 8.
+- `maxConcurrentJobs`: active Codex job cap. Defaults to 8 and is clamped from 1 to 8. Change it in the JSON config, with `npm run install:cowork -- --max-concurrent-jobs <n>`, or from Cowork with `/concurrency <n>`.
 
 `cwdAllowlist` may point at an exact workspace or a trusted parent folder. For Cowork VM paths such as `/sessions/<session>/mnt/<workspace>`, the bridge first tries host-absolute mapping and then maps the VM workspace basename back onto matching allowlisted host folders. Ambiguous mappings are rejected; use a host-absolute Mac path or narrow the allowlist.
 
@@ -112,6 +116,7 @@ Reviews force read-only behavior. `full-local-access` cannot be configured as th
 The plugin exposes these MCP tools:
 
 - `codex_setup`
+- `codex_set_max_concurrent_jobs`
 - `codex_start_task`
 - `codex_start_review`
 - `codex_job_status`
@@ -129,6 +134,8 @@ Typical flow:
 5. Cancel long-running jobs with `codex_cancel_job`.
 
 Operating rule: do not run write-capable Codex jobs while Cowork is actively editing the same files. Read-only reviews are safe to run concurrently.
+
+Multiple active jobs are supported today as separate Codex CLI processes with separate job ids, logs, and results. This gives Cowork parallel Codex implementation or review subagents, bounded by `maxConcurrentJobs`. Avoid starting multiple write-capable jobs against the same files at the same time.
 
 ## Validation
 

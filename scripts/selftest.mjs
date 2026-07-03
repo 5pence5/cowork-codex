@@ -177,7 +177,7 @@ try {
     }), "utf8");
     const config = await readLocalConfig(badConfig);
     if (config.defaultProfile !== "workspace-write") throw new Error(`defaultProfile was ${config.defaultProfile}`);
-    if (config.maxConcurrentJobs !== 2) throw new Error(`maxConcurrentJobs was ${config.maxConcurrentJobs}`);
+    if (config.maxConcurrentJobs !== 8) throw new Error(`maxConcurrentJobs was ${config.maxConcurrentJobs}`);
     if (config.cwdAllowlist.length !== 0) throw new Error("non-array cwdAllowlist should be ignored");
     if (config.codexBin !== null) throw new Error("non-string codexBin should be ignored");
     if (!config.warnings?.length) throw new Error("expected config warnings");
@@ -829,7 +829,7 @@ setInterval(() => {}, 1000);
   await expect("tools/list", async () => {
     const response = await send("tools/list");
     toolNames = response.result?.tools?.map((tool) => tool.name).sort() || [];
-    const expected = ["codex_cancel_job", "codex_job_result", "codex_job_status", "codex_setup", "codex_start_review", "codex_start_task"].sort();
+    const expected = ["codex_cancel_job", "codex_job_result", "codex_job_status", "codex_set_max_concurrent_jobs", "codex_setup", "codex_start_review", "codex_start_task"].sort();
     for (const name of expected) {
       if (!toolNames.includes(name)) throw new Error(`missing ${name}`);
     }
@@ -851,6 +851,17 @@ setInterval(() => {}, 1000);
     if (!setup.childProcess?.envPolicy?.includes("same scrubbed child environment")) throw new Error(`missing child env policy: ${setup.childProcess?.envPolicy}`);
     if (setup.localConfig.path !== tempConfig) throw new Error("temporary config not used");
     return setup.codex.version.text;
+  });
+
+  await expect("codex_set_max_concurrent_jobs updates local config", async () => {
+    const response = await callTool("codex_set_max_concurrent_jobs", { maxConcurrentJobs: 99 }, 30000);
+    if (response.result?.isError) throw new Error(JSON.stringify(response.result.structuredContent));
+    const updated = data(response);
+    if (updated.maxConcurrentJobs !== 8) throw new Error(`maxConcurrentJobs was ${updated.maxConcurrentJobs}`);
+    if (updated.effectiveMaxConcurrentJobs !== 8) throw new Error(`effective value was ${updated.effectiveMaxConcurrentJobs}`);
+    const config = JSON.parse(await readFile(tempConfig, "utf8"));
+    if (config.maxConcurrentJobs !== 8) throw new Error(`config file value was ${config.maxConcurrentJobs}`);
+    return updated.warnings.join(" | ");
   });
 
   await expect("input validation rejects unknown field", async () => {

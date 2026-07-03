@@ -1,6 +1,6 @@
 {
   "name": "cowork-codex",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Expose host Codex as Cowork-accessible MCP setup and delegation tools.",
   "license": "MIT",
   "author": {

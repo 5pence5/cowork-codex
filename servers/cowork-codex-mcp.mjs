@@ -2,13 +2,13 @@
 import readline from "node:readline";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { collectCodexSetup } from "../src/codex-discovery.mjs";
+import { MAX_CONCURRENT_JOBS_LIMIT, collectCodexSetup, localConfigPath, setLocalMaxConcurrentJobs } from "../src/codex-discovery.mjs";
 import { JobStore } from "../src/job-store.mjs";
 import { cancelActiveJobs, cancelJob, createRunnerContext, REVIEW_ENGINE, startCodexJob, waitForJob } from "../src/codex-runner.mjs";
 
 const SERVER_INFO = {
   name: "cowork-codex",
-  version: "0.1.1"
+  version: "0.1.2"
 };
 const PROTOCOL_VERSION = "2025-06-18";
 
@@ -36,6 +36,21 @@ const TOOLS = [
     name: "codex_setup",
     description: "Report host execution proof, Codex CLI discovery/auth/version state, Node version, local config summary, and active job count.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false }
+  },
+  {
+    name: "codex_set_max_concurrent_jobs",
+    description: `Set the host local-config maxConcurrentJobs value for future Codex jobs. Values are clamped from 1 to ${MAX_CONCURRENT_JOBS_LIMIT}.`,
+    inputSchema: {
+      type: "object",
+      required: ["maxConcurrentJobs"],
+      properties: {
+        maxConcurrentJobs: {
+          type: "number",
+          description: `Requested active-job cap. Values are clamped from 1 to ${MAX_CONCURRENT_JOBS_LIMIT}.`
+        }
+      },
+      additionalProperties: false
+    }
   },
   {
     name: "codex_start_task",
@@ -257,6 +272,15 @@ async function callTool(name, args) {
   switch (name) {
     case "codex_setup":
       return setupTool();
+    case "codex_set_max_concurrent_jobs": {
+      const update = await setLocalMaxConcurrentJobs(localConfigPath(process.env), args.maxConcurrentJobs);
+      const setup = await collectCodexSetup(process.env);
+      return {
+        ...update,
+        effectiveMaxConcurrentJobs: setup.localConfig.maxConcurrentJobs,
+        localConfigSource: setup.localConfig.source
+      };
+    }
     case "codex_start_task": {
       const ctx = await runnerContext();
       const job = await startCodexJob(ctx, {

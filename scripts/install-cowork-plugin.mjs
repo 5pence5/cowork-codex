@@ -6,6 +6,7 @@ import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { normalizeMaxConcurrentJobs } from "../src/codex-discovery.mjs";
 
 const execFileAsync = promisify(execFile);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -20,6 +21,8 @@ Options:
   --allowlist <path>      Trusted Mac host folder. Repeat for multiple folders.
   --config <path>         Config path. Defaults to ~/.config/cowork-codex/cowork-codex.local.json.
   --codex-bin <path>      Absolute Codex binary path to write into config.
+  --max-concurrent-jobs <n>
+                           Active Codex job cap to write into config. Clamped from 1 to 8.
   --skip-plugin-install   Only create/update config and validate; do not run claude plugin install.
   --dry-run               Print actions without changing files or installing.
   --help                  Show this help.
@@ -32,6 +35,8 @@ function parseArgs(argv) {
     allowlist: [],
     configPath: defaultConfigPath,
     codexBin: null,
+    maxConcurrentJobs: null,
+    warnings: [],
     dryRun: false,
     skipPluginInstall: false
   };
@@ -55,6 +60,10 @@ function parseArgs(argv) {
       const value = argv[++i];
       if (!value) throw new Error("--codex-bin requires a path");
       options.codexBin = resolve(value);
+    } else if (arg === "--max-concurrent-jobs") {
+      const value = argv[++i];
+      if (!value) throw new Error("--max-concurrent-jobs requires a number");
+      options.maxConcurrentJobs = normalizeMaxConcurrentJobs(value, options.warnings);
     } else {
       throw new Error(`Unknown argument: ${arg}`);
     }
@@ -119,6 +128,10 @@ async function main() {
 
   if (options.allowlist.length) config.cwdAllowlist = options.allowlist;
   if (options.codexBin) config.codexBin = options.codexBin;
+  if (options.maxConcurrentJobs !== null) config.maxConcurrentJobs = options.maxConcurrentJobs;
+  for (const warning of options.warnings) {
+    console.error(`Warning: ${warning}`);
+  }
 
   if (options.dryRun) {
     console.log(`[dry-run] write ${options.configPath}`);

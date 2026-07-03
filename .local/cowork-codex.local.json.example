@@ -4,6 +4,6 @@
     "<trusted-host-workspace>"
   ],
   "codexBin": null,
-  "maxConcurrentJobs": 2,
+  "maxConcurrentJobs": 8,
   "notes": "Copy this file to ~/.config/cowork-codex/cowork-codex.local.json for installed-plugin machine settings. Placeholder allowlist entries beginning with < are ignored. defaultProfile accepts read-only or workspace-write; workspace-write matches the Codex Claude plugin write-capable rescue default. full-local-access is per-job opt-in only. The repo .local directory is for direct development when COWORK_CODEX_LOCAL_CONFIG points at it."
 }
