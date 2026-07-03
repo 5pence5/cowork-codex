@@ -3,7 +3,7 @@
   "version": "0.1.2",
   "private": true,
   "type": "module",
-  "description": "Claude Cowork plugin bridge for host-side Codex delegation.",
+  "description": "Claude Cowork plugin bridge for host-side Codex implementation and research.",
   "license": "MIT",
   "engines": {
     "node": ">=18"

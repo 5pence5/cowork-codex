@@ -1,8 +1,8 @@
 # Cowork Codex
 
-Cowork Codex gives Fable in Claude Cowork a Codex implementation subagent: the Codex CLI already installed and authenticated on your Mac. Cowork coordinates; Codex implements, reviews, and reports back, only inside folders you allowlist.
+Cowork Codex gives Fable in Claude Cowork a Codex implementation and research subagent: the Codex CLI already installed and authenticated on your Mac. Cowork coordinates; Codex researches, implements, reviews, and reports back, only inside folders you allowlist.
 
-Use it to hand off longer implementation or review work to Codex while keeping the main Cowork thread lighter and conserving context and tokens.
+Use it to hand off longer implementation, research, or review work to Codex while keeping the main Cowork thread lighter and conserving context and tokens.
 
 It is designed for the Cowork host/VM split: Codex runs on the Mac where it is already authenticated, while Cowork can start tasks, reviews, resumes, and cancellations through a bundled stdio MCP server.
 
@@ -135,7 +135,7 @@ Typical flow:
 
 Operating rule: do not run write-capable Codex jobs while Cowork is actively editing the same files. Read-only reviews are safe to run concurrently.
 
-Multiple active jobs are supported today as separate Codex CLI processes with separate job ids, logs, and results. This gives Cowork parallel Codex implementation or review subagents, bounded by `maxConcurrentJobs`. Avoid starting multiple write-capable jobs against the same files at the same time.
+Multiple active jobs are supported today as separate Codex CLI processes with separate job ids, logs, and results. This gives Cowork parallel Codex implementation, research, or review subagents, bounded by `maxConcurrentJobs`. Avoid starting multiple write-capable jobs against the same files at the same time.
 
 ## Validation
 

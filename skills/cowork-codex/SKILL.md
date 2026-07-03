@@ -5,7 +5,7 @@ description: Use host Codex from Claude Cowork through the cowork-codex MCP brid
 
 # Cowork Codex Workflow
 
-Use the bridge MCP tools when Cowork needs Codex as a second reviewer, rescue worker, or parallel implementation lane.
+Use the bridge MCP tools when Cowork needs Codex as a second reviewer, research worker, rescue worker, or parallel implementation lane.
 
 Rules:
 

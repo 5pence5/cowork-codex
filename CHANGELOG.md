@@ -5,7 +5,7 @@
 - Changed the default active Codex job cap to 8, matching the hard cap.
 - Added `codex_set_max_concurrent_jobs` and `/concurrency` so Cowork can change the host-local active-job cap.
 - Added `npm run install:cowork -- --max-concurrent-jobs <n>` for clone-based setup.
-- Clarified that multiple active jobs act as parallel Codex implementation or review subagents with separate job ids, logs, and results.
+- Clarified that multiple active jobs act as parallel Codex implementation, research, or review subagents with separate job ids, logs, and results.
 
 ## 0.1.1 - 2026-07-03
 
