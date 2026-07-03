@@ -1,5 +1,5 @@
 ---
-description: Cancel a Codex bridge job
+description: Cancel a delegated Codex job
 argument-hint: "<job-id>"
 ---
 

@@ -27,7 +27,7 @@ Future versions can move beyond compatibility with richer job grouping, named su
 - Host-side Codex discovery, version, login, config, and active-job diagnostics through `codex_setup`.
 - Background or foreground Codex research and implementation jobs through `codex_start_task` and `/delegate`.
 - Standard and critical read-only review jobs through `codex_start_review`.
-- Job polling, result retrieval, and cancellation through `codex_job_status`, `codex_job_result`, and `codex_cancel_job`.
+- Delegated job management through `/status`, `/result`, and `/cancel`, backed by `codex_job_status`, `codex_job_result`, and `codex_cancel_job`.
 - Multiple active Codex jobs, bounded by `maxConcurrentJobs` (`8` by default, clamped from `1` to `8`).
 - Cowork-visible concurrency tuning through `codex_set_max_concurrent_jobs` and `/concurrency`.
 - Cowork-native `codex-prompting` skill for compact, block-structured implementation, research, and diagnosis handoffs.
@@ -147,10 +147,10 @@ For `/delegate` and direct `codex_start_task` use, Cowork should shape non-trivi
 Typical flow:
 
 1. Run `codex_setup`.
-2. Start a task or review with a Cowork cwd or Mac host cwd.
-3. Poll with `codex_job_status`.
-4. Fetch final output with `codex_job_result`.
-5. Cancel long-running jobs with `codex_cancel_job`.
+2. Start a task with `/delegate` or a review with `/review` or `/critical-review`.
+3. Poll delegated jobs with `/status <job-id>`.
+4. Fetch final output with `/result <job-id>`.
+5. Cancel long-running delegated jobs with `/cancel <job-id>`.
 
 Operating rule: do not run write-capable Codex jobs while Cowork is actively editing the same files. Read-only reviews are safe to run concurrently.
 

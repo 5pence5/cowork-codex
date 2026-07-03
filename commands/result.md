@@ -1,5 +1,5 @@
 ---
-description: Show a completed Codex job result
+description: Show a delegated Codex job result
 argument-hint: "<job-id>"
 ---
 
