@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.8 - 2026-07-03
+
+- Reshaped README usage docs to match the OpenAI Codex Claude Code plugin tone and structure.
+- Added `AGENTS.md` and a soft public-copy wording guide for future edits.
+- Clarified review-tool descriptions for focused standard reviews and adversarial reviews.
+- Clarified POSIX and Windows log-location wording.
+- Verified the example local config is tracked and present in the release archive.
+
 ## 0.1.7 - 2026-07-03
 
 - Replaced the Unix shell MCP launch path with direct host `node` execution.
