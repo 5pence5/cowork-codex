@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { chmod, mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { execFile, spawn } from "node:child_process";
@@ -8,8 +8,8 @@ import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 import { promisify } from "node:util";
 import { buildCodexChildEnv } from "../src/child-env.mjs";
-import { readLocalConfig } from "../src/codex-discovery.mjs";
-import { classifyError, codexArgsForJob, redactCodexArgs, resolveReviewSelection, startCodexJob, waitForJob } from "../src/codex-runner.mjs";
+import { collectCodexSetup, firstExecutablePathLine, readLocalConfig } from "../src/codex-discovery.mjs";
+import { cancelJob, classifyError, codexArgsForJob, redactCodexArgs, resolveReviewSelection, startCodexJob, waitForJob } from "../src/codex-runner.mjs";
 import { defaultLogsDir, JobStore } from "../src/job-store.mjs";
 import { mapAndValidateCwd } from "../src/path-map.mjs";
 
@@ -158,6 +158,10 @@ async function expect(name, fn) {
   }
 }
 
+async function modeOf(path) {
+  return (await stat(path)).mode & 0o777;
+}
+
 let exitCode = 0;
 
 try {
@@ -176,6 +180,39 @@ try {
     if (config.codexBin !== null) throw new Error("non-string codexBin should be ignored");
     if (!config.warnings?.length) throw new Error("expected config warnings");
     return config.warnings.join(" | ");
+  });
+
+  await expect("shell discovery ignores noisy startup output", async () => {
+    const fakeCodex = join(tempRoot, "fake-codex-discovery");
+    await writeFile(fakeCodex, "#!/bin/sh\nexit 0\n", "utf8");
+    await chmod(fakeCodex, 0o755);
+    const selected = await firstExecutablePathLine(`Welcome back\n${fakeCodex}\n`);
+    if (selected !== fakeCodex) throw new Error(`selected ${selected || "<none>"}`);
+    return selected;
+  });
+
+  await expect("codex setup treats Not logged in as unauthenticated", async () => {
+    const fakeCodex = join(tempRoot, "fake-codex-login-status.mjs");
+    await writeFile(fakeCodex, `#!/usr/bin/env node
+if (process.argv[2] === "--version") {
+  console.log("codex-cli 0.142.5");
+  process.exit(0);
+}
+if (process.argv[2] === "login" && process.argv[3] === "status") {
+  console.log("Not logged in");
+  process.exit(0);
+}
+process.exit(1);
+`, "utf8");
+    await chmod(fakeCodex, 0o755);
+    const setup = await collectCodexSetup({
+      ...process.env,
+      CODEX_BIN: fakeCodex,
+      COWORK_CODEX_LOCAL_CONFIG: tempConfig
+    });
+    if (setup.codex.loginStatus.loggedIn) throw new Error("Not logged in was parsed as logged in");
+    if (setup.codex.loginStatus.method !== null) throw new Error(`unexpected method ${setup.codex.loginStatus.method}`);
+    return `loggedIn=${setup.codex.loginStatus.loggedIn}`;
   });
 
   await expect("child env drops broad CODEX variables", async () => {
@@ -291,6 +328,44 @@ try {
     return `${hostMapped.cwd} / ${workspaceMapped.cwd} / ${workspaceChildMapped.cwd}`;
   });
 
+  await expect("Cowork VM path mapping rejects ambiguous allowlist matches", async () => {
+    const firstApp = join(tempRoot, "path-map-a", "app");
+    const secondApp = join(tempRoot, "path-map-b", "app");
+    await mkdir(firstApp, { recursive: true });
+    await mkdir(secondApp, { recursive: true });
+    const duplicateConfig = { exists: true, path: tempConfig, cwdAllowlist: [firstApp, secondApp] };
+    let duplicateMessage = "";
+    try {
+      await mapAndValidateCwd("/sessions/alice/mnt/app", duplicateConfig);
+    } catch (error) {
+      duplicateMessage = error.message;
+    }
+    if (!duplicateMessage.includes("multiple allowlisted host folders")) {
+      throw new Error(`duplicate basename was not rejected: ${duplicateMessage}`);
+    }
+
+    const parent = join(tempRoot, "path-map-parent");
+    const parentSrc = join(parent, "src");
+    const siblingSrc = join(tempRoot, "src");
+    await mkdir(parentSrc, { recursive: true });
+    await mkdir(siblingSrc, { recursive: true });
+    const relativeConfig = { exists: true, path: tempConfig, cwdAllowlist: [parent, siblingSrc] };
+    let relativeMessage = "";
+    try {
+      await mapAndValidateCwd("/sessions/alice/mnt/src", relativeConfig);
+    } catch (error) {
+      relativeMessage = error.message;
+    }
+    if (!relativeMessage.includes("multiple allowlisted host folders")) {
+      throw new Error(`relative ambiguity was not rejected: ${relativeMessage}`);
+    }
+
+    const hostAbsolute = await mapAndValidateCwd(`/sessions/alice/mnt${secondApp}`, duplicateConfig);
+    const secondAppReal = await realpath(secondApp);
+    if (hostAbsolute.cwd !== secondAppReal) throw new Error(`host absolute path mapped to ${hostAbsolute.cwd}`);
+    return `${duplicateMessage.slice(0, 80)} | ${hostAbsolute.cwd}`;
+  });
+
   await expect("review selection rejects base and commit together", async () => {
     const reviewRepo = join(tempRoot, "review-selection-repo");
     await mkdir(reviewRepo, { recursive: true });
@@ -360,6 +435,83 @@ try {
     if (swept.status !== "failed" || swept.phase !== "orphaned") throw new Error(`unexpected orphan status ${swept.status}/${swept.phase}`);
     if (store.activeCount() !== 0) throw new Error(`orphan remained active: ${store.activeCount()}`);
     return swept.errorMessage;
+  });
+
+  await expect("orphan sweep and no-handle cancel do not signal stored pids", async () => {
+    const originalKill = process.kill;
+    const calls = [];
+    process.kill = (...args) => {
+      calls.push(args);
+      throw Object.assign(new Error("mocked process.kill"), { code: "ESRCH" });
+    };
+    try {
+      const store = new JobStore(tempRoot, { logsDir: join(tempRoot, "stored-pid-logs") });
+      await store.init();
+      const orphan = await store.create({
+        type: "task",
+        cwd: tempWorkspace,
+        originalCwd: tempWorkspace,
+        profile: "read-only",
+        sandbox: "read-only",
+        prompt: "ORPHAN_STORED_PID_PROMPT"
+      });
+      await store.update(orphan.id, { status: "running", phase: "process.started", pid: 123456 });
+      await store.sweepOrphans();
+      const swept = store.get(orphan.id);
+      if (swept.status !== "failed" || swept.phase !== "orphaned") throw new Error(`unexpected orphan ${swept.status}/${swept.phase}`);
+
+      const cancelTarget = await store.create({
+        type: "task",
+        cwd: tempWorkspace,
+        originalCwd: tempWorkspace,
+        profile: "read-only",
+        sandbox: "read-only",
+        prompt: "CANCEL_STORED_PID_PROMPT"
+      });
+      await store.update(cancelTarget.id, { status: "running", phase: "process.started", pid: 234567 });
+      const cancelled = await cancelJob(store, cancelTarget.id);
+      if (cancelled.status !== "cancelled" || cancelled.phase !== "cancelled.no-live-handle") {
+        throw new Error(`unexpected cancel ${cancelled.status}/${cancelled.phase}`);
+      }
+      if (calls.length !== 0) throw new Error(`stored pid was signalled: ${JSON.stringify(calls)}`);
+      return "no process.kill calls";
+    } finally {
+      process.kill = originalKill;
+    }
+  });
+
+  await expect("job store writes private log files", async () => {
+    const oldUmask = process.umask(0o022);
+    try {
+      const logsDir = join(tempRoot, "private-permission-logs");
+      const store = new JobStore(tempRoot, { logsDir });
+      await store.init();
+      const job = await store.create({
+        type: "task",
+        cwd: tempWorkspace,
+        originalCwd: tempWorkspace,
+        profile: "read-only",
+        sandbox: "read-only",
+        prompt: "PRIVATE_PERMISSION_PROMPT"
+      });
+      await store.appendOut(job, "out\n");
+      await store.appendErr(job, "err\n");
+      await store.appendRawEvent(job, { type: "test.event" });
+      const expected = [
+        [logsDir, 0o700],
+        [store.jobsPath, 0o600],
+        [job.logs.out, 0o600],
+        [job.logs.err, 0o600],
+        [job.logs.events, 0o600]
+      ];
+      for (const [path, mode] of expected) {
+        const actual = await modeOf(path);
+        if (actual !== mode) throw new Error(`${path} mode ${actual.toString(8)} expected ${mode.toString(8)}`);
+      }
+      return "logs 0700; files 0600";
+    } finally {
+      process.umask(oldUmask);
+    }
   });
 
   await expect("orphan sweep preserves jobs owned by live server", async () => {

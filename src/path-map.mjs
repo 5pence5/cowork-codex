@@ -73,22 +73,38 @@ export async function mapAndValidateCwd(inputCwd, localConfig) {
   }
 
   let lastError = null;
+  const matches = [];
+  const seenMatches = new Set();
   for (const candidate of candidates) {
     try {
       const rp = await realpathIfExists(candidate);
       if (!(await existsDir(rp))) continue;
       const matchedRoot = allowlistRoots.find((root) => inside(rp, root));
       if (matchedRoot) {
-        return {
-          inputCwd,
-          cwd: rp,
-          matchedRoot,
-          mappedFromVmPath: Boolean(vmMatch)
-        };
+        const key = `${rp}\0${matchedRoot}`;
+        if (!seenMatches.has(key)) {
+          seenMatches.add(key);
+          matches.push({ cwd: rp, matchedRoot });
+        }
       }
     } catch (error) {
       lastError = error;
     }
+  }
+
+  const distinctCwds = [...new Map(matches.map((match) => [match.cwd, match])).values()];
+  if (distinctCwds.length === 1) {
+    return {
+      inputCwd,
+      cwd: distinctCwds[0].cwd,
+      matchedRoot: distinctCwds[0].matchedRoot,
+      mappedFromVmPath: Boolean(vmMatch)
+    };
+  }
+
+  if (distinctCwds.length > 1) {
+    const choices = distinctCwds.map((match) => match.cwd).join(", ");
+    throw new Error(`cwd maps to multiple allowlisted host folders: ${inputCwd}. Matched: ${choices}. Pass a host-absolute Mac path or narrow ${configPath} cwdAllowlist.`);
   }
 
   throw new Error(`cwd is outside the configured allowlist or does not exist: ${inputCwd}. Update ${configPath} cwdAllowlist with the trusted Mac host folder. ${lastError?.message || ""}`.trim());

@@ -1,7 +1,7 @@
 import { access, readFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
@@ -22,6 +22,27 @@ async function isExecutable(path) {
   } catch {
     return false;
   }
+}
+
+export async function firstExecutablePathLine(stdout = "") {
+  for (const line of String(stdout).split(/\r?\n/)) {
+    const candidate = line.trim();
+    if (candidate && isAbsolute(candidate) && await isExecutable(candidate)) {
+      return candidate;
+    }
+  }
+  return "";
+}
+
+export function parseCodexLoginStatus(loginText = "", commandOk = false) {
+  const text = String(loginText);
+  const method = text.match(/Logged in using\s+([A-Za-z0-9._ -]+)/)?.[1]?.trim() || null;
+  const explicitlyNotLoggedIn = /\b(not\s+logged\s+in|logged\s+out|unauthenticated)\b/i.test(text);
+  const explicitlyLoggedIn = Boolean(method) || /\blogged\s+in\b/i.test(text);
+  return {
+    loggedIn: Boolean(commandOk && explicitlyLoggedIn && !explicitlyNotLoggedIn),
+    method
+  };
 }
 
 async function run(command, args, options = {}) {
@@ -69,13 +90,15 @@ export async function resolveCodexBinary(env = process.env, localConfig = null) 
   }
 
   const shellResult = await run("/bin/zsh", ["-lc", "command -v codex"], { env });
-  const shellPath = shellResult.stdout.split(/\r?\n/).find(Boolean) ?? "";
-  const shellOk = shellResult.ok && await isExecutable(shellPath);
+  const shellPath = shellResult.ok ? await firstExecutablePathLine(shellResult.stdout) : "";
+  const shellStdoutLineCount = shellResult.stdout ? shellResult.stdout.split(/\r?\n/).filter(Boolean).length : 0;
+  const shellOk = Boolean(shellPath);
   attempts.push({
     step: "login-shell-command-v",
     command: "/bin/zsh -lc 'command -v codex'",
     path: shellPath || null,
     ok: shellOk,
+    ignoredStdoutLines: Math.max(0, shellStdoutLineCount - (shellPath ? 1 : 0)) || undefined,
     stderr: shellResult.stderr || undefined
   });
   if (shellOk) {
@@ -199,7 +222,7 @@ export async function collectCodexSetup(env = process.env) {
 
   const versionText = codexVersion.stdout || codexVersion.stderr;
   const loginText = loginStatus.stdout || loginStatus.stderr;
-  const loginMethod = loginText.match(/Logged in using\s+([A-Za-z0-9._ -]+)/)?.[1]?.trim() || null;
+  const parsedLogin = parseCodexLoginStatus(loginText, loginStatus.ok);
   const warnings = [];
   if (!codexResolution.path) {
     warnings.push("Codex binary was not found.");
@@ -232,8 +255,8 @@ export async function collectCodexSetup(env = process.env) {
       },
       loginStatus: {
         ok: loginStatus.ok,
-        loggedIn: loginStatus.ok && /logged in/i.test(loginText),
-        method: loginMethod,
+        loggedIn: parsedLogin.loggedIn,
+        method: parsedLogin.method,
         exitCode: loginStatus.exitCode
       }
     },

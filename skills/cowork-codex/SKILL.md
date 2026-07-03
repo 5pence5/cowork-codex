@@ -13,7 +13,7 @@ Rules:
 - Prefer Mac host paths for `cwd`; if Cowork has a `/sessions/<user>/mnt/...` path, pass it through and let the bridge map it.
 - Never run write-capable Codex jobs while Cowork is mid-edit on the same workspace.
 - Read-only review jobs are safe to run concurrently.
-- Choose the permission profile explicitly per job: `read-only`, `workspace-write`, or `full-local-access`.
+- Use the default `workspace-write` profile unless the work is inspection-only or the user explicitly requests another profile.
 - Use `full-local-access` only when the user deliberately asks for it.
 - Use separate Codex jobs for parallel lanes.
 - Use `codex_job_status` with bounded `wait_seconds` rather than tight polling loops.

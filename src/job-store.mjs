@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -26,38 +26,26 @@ function pidAlive(pid) {
   }
 }
 
-function signalProcessGroup(pid, signal) {
-  if (!pid) return false;
-  try {
-    process.kill(-pid, signal);
-    return true;
-  } catch {
-    try {
-      process.kill(pid, signal);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-}
-
-function signalThenEscalate(pid) {
-  if (!pid || !pidAlive(pid)) return false;
-  const signalled = signalProcessGroup(pid, "SIGTERM");
-  setTimeout(() => {
-    if (pidAlive(pid)) signalProcessGroup(pid, "SIGKILL");
-  }, 2000).unref();
-  return signalled;
-}
-
 function makeJobId() {
   const rand = Math.random().toString(36).slice(2, 8);
   return `job-${Date.now().toString(36)}-${rand}`;
 }
 
+async function ensurePrivateDir(path) {
+  await mkdir(path, { recursive: true, mode: 0o700 });
+  await chmod(path, 0o700);
+}
+
+async function writePrivateFile(path, data = "") {
+  await ensurePrivateDir(dirname(path));
+  await writeFile(path, data, { encoding: "utf8", mode: 0o600 });
+  await chmod(path, 0o600);
+}
+
 async function appendJsonl(path, obj) {
-  await mkdir(dirname(path), { recursive: true });
-  await appendFile(path, `${JSON.stringify(obj)}\n`, "utf8");
+  await ensurePrivateDir(dirname(path));
+  await appendFile(path, `${JSON.stringify(obj)}\n`, { encoding: "utf8", mode: 0o600 });
+  await chmod(path, 0o600);
 }
 
 function applyRecord(jobs, record) {
@@ -81,8 +69,9 @@ export class JobStore {
   }
 
   async init() {
-    await mkdir(this.logsDir, { recursive: true });
+    await ensurePrivateDir(this.logsDir);
     if (existsSync(this.jobsPath)) {
+      await chmod(this.jobsPath, 0o600);
       const raw = await readFile(this.jobsPath, "utf8");
       for (const line of raw.split(/\r?\n/)) {
         if (!line.trim()) continue;
@@ -102,15 +91,12 @@ export class JobStore {
         if (job.ownerPid && pidAlive(job.ownerPid)) {
           continue;
         }
-        const signalled = signalThenEscalate(job.pid);
         await this.update(job.id, {
           status: "failed",
           phase: "orphaned",
           endedAt: nowIso(),
           errorKind: "other",
-          errorMessage: signalled
-            ? "Job was active during MCP server restart; the stored child process was signalled and the job was marked orphaned."
-            : "Job was active during MCP server restart; no supervised child process was available and the job was marked orphaned.",
+          errorMessage: "Job was active during MCP server restart; no live supervised child process was available, so the job was marked orphaned without signalling any stored pid.",
           pid: null
         });
       }
@@ -163,9 +149,9 @@ export class JobStore {
     };
     this.jobs.set(id, job);
     await appendJsonl(this.jobsPath, { type: "job.created", at: nowIso(), job });
-    await writeFile(paths.out, "", "utf8");
-    await writeFile(paths.err, "", "utf8");
-    await writeFile(paths.events, "", "utf8");
+    await writePrivateFile(paths.out);
+    await writePrivateFile(paths.err);
+    await writePrivateFile(paths.events);
     return job;
   }
 
@@ -220,11 +206,13 @@ export class JobStore {
   }
 
   async appendOut(job, text) {
-    await appendFile(job.logs.out, text, "utf8");
+    await appendFile(job.logs.out, text, { encoding: "utf8", mode: 0o600 });
+    await chmod(job.logs.out, 0o600);
   }
 
   async appendErr(job, text) {
-    await appendFile(job.logs.err, text, "utf8");
+    await appendFile(job.logs.err, text, { encoding: "utf8", mode: 0o600 });
+    await chmod(job.logs.err, 0o600);
   }
 
   summarize(job) {

@@ -49,7 +49,7 @@ Edit `cwdAllowlist` to include trusted Mac host folders:
 
 The real `.local/` directory is gitignored. If the local config is missing, task and review jobs are denied until the allowlist is configured. Placeholder allowlist entries beginning with `<` are ignored, so the example file is safe to copy before editing.
 
-`cwdAllowlist` may point at the exact workspace or a trusted parent folder. For Cowork VM paths such as `/sessions/<user>/mnt/<workspace>`, the bridge first tries a host-absolute mapping and then maps the VM workspace basename back onto matching allowlisted host folders. Prefer exact workspace allowlist entries when possible.
+`cwdAllowlist` may point at the exact workspace or a trusted parent folder. For Cowork VM paths such as `/sessions/<user>/mnt/<workspace>`, the bridge first tries a host-absolute mapping and then maps the VM workspace basename back onto matching allowlisted host folders. If a VM path could map to more than one allowlisted host folder, the bridge rejects it and asks for a host-absolute Mac path or a narrower allowlist. Prefer exact workspace allowlist entries when possible.
 
 `defaultProfile` may be `read-only` or `workspace-write`; the shipped default is `workspace-write`. That matches the Codex Claude plugin's rescue behavior: write-capable by default for implementation work, but scoped to the workspace rather than broad local access. Full local access cannot be made the default and remains an explicit per-job option. `maxConcurrentJobs` is clamped to a positive integer from 1 to 8.
 
@@ -111,10 +111,16 @@ Controls:
 - Full local access is per-job opt-in only.
 - Default profile is `workspace-write`, aligned with the Codex Claude plugin's write-capable rescue default.
 - Every job cwd is realpath-checked against `cwdAllowlist`.
-- JSONL events, stdout, stderr, status transitions, and final results are logged under `~/.local/state/cowork-codex/logs/`; command metadata redacts prompt text.
+- JSONL events, stdout, stderr, status transitions, and final results are logged under `~/.local/state/cowork-codex/logs/`; command metadata redacts prompt text. The log directory is created as user-private (`0700`) and job files are created as user-private (`0600`).
 - Job results include changed-output context through Codex output and log paths so Cowork can re-read files after write jobs.
 
 Set `COWORK_CODEX_LOG_DIR` only for development or tests when you need logs somewhere else. Logs are append-only until you delete them; they may include Codex output and final messages, so treat the directory as local user data.
+
+To clear local job history:
+
+```bash
+rm -rf ~/.local/state/cowork-codex/logs
+```
 
 ## Troubleshooting
 

@@ -490,13 +490,14 @@ export async function cancelJob(jobStore, id) {
     return job;
   }
   if (!proc) {
-    if (job.pid) killPid(job.pid, "SIGTERM");
     return jobStore.update(id, {
       status: "cancelled",
       phase: "cancelled.no-live-handle",
       endedAt: new Date().toISOString(),
       errorKind: null,
-      errorMessage: job.pid ? "No live process handle was available; the stored child pid was signalled if still alive." : "Job was not running when cancel was requested."
+      errorMessage: job.pid
+        ? "No live process handle was available; the stored child pid was not signalled."
+        : "Job was not running when cancel was requested."
     });
   }
   let exited = false;
