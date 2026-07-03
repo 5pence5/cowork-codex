@@ -229,17 +229,34 @@ The plugin also exposes these MCP tools:
 
 ## Typical Flows
 
+### First Sanity Check
+
+```bash
+/setup
+/review --background
+/status
+/result
+```
+
 ### Review Before Shipping
 
 ```bash
 /review
+/review --base main
+/adversarial-review --base main challenge whether this was the right implementation approach
 ```
+
+Use `/review` for the normal Codex review pass. Use `/adversarial-review` when you want Codex to question the design, assumptions, tradeoffs, or a specific risk area.
 
 ### Hand A Problem To Codex
 
 ```bash
 /delegate investigate why the build is failing in CI
+/delegate fix the failing test with the smallest focused patch
+/delegate --background research the best way to migrate this module to the new API
 ```
+
+This is the main Cowork flow: Fable keeps coordinating in Cowork while Codex takes a separate research or implementation pass on the host checkout.
 
 ### Start Something Long-Running
 
@@ -254,6 +271,24 @@ Then check in with:
 /status
 /result
 ```
+
+### Continue A Codex Run
+
+```bash
+/delegate --resume latest apply the top fix from the last run
+/result
+```
+
+Use this when a Codex run found the right direction but needs one more pass.
+
+### Tune Parallel Work
+
+```bash
+/concurrency
+/concurrency 8
+```
+
+Use `/concurrency` to view or change how many Codex jobs Cowork Codex can run at once. The same value can also be set in `cowork-codex.local.json`.
 
 ## Codex Integration
 
