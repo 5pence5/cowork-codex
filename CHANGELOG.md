@@ -35,7 +35,7 @@
 - Added a Cowork-native `codex-prompting` skill for compact, block-structured Codex task handoffs through `/delegate` and `codex_start_task`.
 - Added `/delegate` as the task handoff command for the primary Fable use case: delegating research and implementation while conserving Cowork context and tokens.
 - Clarified that `/status`, `/result`, and `/cancel` manage delegated Codex jobs after `/delegate` starts them.
-- Clarified that Cowork task prompts should preserve bridge permission profiles, resume semantics, and non-overlapping write scopes instead of copying Claude Code plugin internals wholesale.
+- Clarified that Cowork task prompts should preserve bridge profile handling, resume semantics, and non-overlapping write scopes instead of copying Claude Code plugin internals wholesale.
 
 ## 0.1.2 - 2026-07-03
 
@@ -47,7 +47,7 @@
 ## 0.1.1 - 2026-07-03
 
 - Added host-side Cowork Codex MCP bridge with setup, task, review, status, result, and cancel tools.
-- Added Cowork VM path mapping to trusted host folders with ambiguity rejection.
+- Added Cowork VM path mapping to configured host folders with ambiguity rejection.
 - Set `workspace-write` as the default implementation profile and added `full-local-access` profile mapping to Codex `danger-full-access`.
 - Added private local job logs and prompt-redacted command metadata.
 - Added Codex CLI discovery, login status parsing, child PATH augmentation, and setup diagnostics.

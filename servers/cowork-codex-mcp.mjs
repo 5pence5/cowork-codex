@@ -27,9 +27,9 @@ const commonWait = {
 const EFFORT_VALUES = ["none", "minimal", "low", "medium", "high", "xhigh"];
 const REVIEW_SCOPE_VALUES = ["auto", "working-tree", "branch"];
 const PROFILE_VALUES = ["read-only", "workspace-write", "full-local-access"];
-const SAFE_MODEL = /^[A-Za-z0-9._:-]+$/;
-const SAFE_REF = /^[A-Za-z0-9._/-]+$/;
-const SAFE_RESUME = /^[A-Za-z0-9-]+$/;
+const VALID_MODEL = /^[A-Za-z0-9._:-]+$/;
+const VALID_REF = /^[A-Za-z0-9._/-]+$/;
+const VALID_RESUME = /^[A-Za-z0-9-]+$/;
 
 const TOOLS = [
   {
@@ -61,7 +61,7 @@ const TOOLS = [
       properties: {
         prompt: { type: "string", minLength: 1 },
         cwd: { type: "string", minLength: 1 },
-        profile: { type: "string", enum: PROFILE_VALUES, description: "Permission profile for this job." },
+        profile: { type: "string", enum: PROFILE_VALUES, description: "Codex profile for this job." },
         model: { type: "string", description: "Optional Codex model id. Must match ^[A-Za-z0-9._:-]+$." },
         effort: { type: "string", enum: EFFORT_VALUES },
         resume: { type: "string", description: "Use 'latest' for the latest completed thread in this workspace, or pass an explicit thread id matching ^[A-Za-z0-9-]+$." },
@@ -79,7 +79,7 @@ const TOOLS = [
       properties: {
         prompt: { type: "string", minLength: 1 },
         cwd: { type: "string", minLength: 1 },
-        profile: { type: "string", enum: PROFILE_VALUES, description: "Permission profile for this job." },
+        profile: { type: "string", enum: PROFILE_VALUES, description: "Codex profile for this job." },
         model: { type: "string", description: "Optional Codex model id. Must match ^[A-Za-z0-9._:-]+$." },
         effort: { type: "string", enum: EFFORT_VALUES },
         resume: { type: "string", description: "Use 'latest' for the latest completed thread in this workspace, or pass an explicit thread id matching ^[A-Za-z0-9-]+$." },
@@ -90,7 +90,7 @@ const TOOLS = [
   },
   {
     name: "codex_start_review",
-    description: "Start a read-only Codex review. Standard mode uses codex exec review; adversarial mode uses a structured review prompt.",
+    description: "Start a read-only Codex review. Unfocused standard reviews use codex exec review; focused standard reviews and adversarial reviews use a structured review prompt.",
     inputSchema: {
       type: "object",
       required: ["cwd"],
@@ -205,13 +205,13 @@ function validatePatternField(field, value) {
   if (field === "scope" && !REVIEW_SCOPE_VALUES.includes(value)) {
     return "scope must be one of auto, working-tree, branch";
   }
-  if (field === "model" && !SAFE_MODEL.test(value)) {
+  if (field === "model" && !VALID_MODEL.test(value)) {
     return "model must match ^[A-Za-z0-9._:-]+$";
   }
-  if ((field === "base" || field === "commit") && !SAFE_REF.test(value)) {
+  if ((field === "base" || field === "commit") && !VALID_REF.test(value)) {
     return `${field} must match ^[A-Za-z0-9._/-]+$`;
   }
-  if (field === "resume" && value !== "latest" && !SAFE_RESUME.test(value)) {
+  if (field === "resume" && value !== "latest" && !VALID_RESUME.test(value)) {
     return "resume must be 'latest' or match ^[A-Za-z0-9-]+$";
   }
   return null;

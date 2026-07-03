@@ -12,7 +12,7 @@ cat > ~/.config/cowork-codex/cowork-codex.local.json <<'JSON'
 {
   "defaultProfile": "workspace-write",
   "cwdAllowlist": [
-    "/absolute/path/to/trusted/workspace"
+    "/absolute/path/to/workspace"
   ],
   "codexBin": null,
   "maxConcurrentJobs": 8
@@ -28,7 +28,7 @@ New-Item -ItemType Directory -Force "$env:APPDATA\cowork-codex" | Out-Null
 {
   "defaultProfile": "workspace-write",
   "cwdAllowlist": [
-    "C:\\absolute\\path\\to\\trusted\\workspace"
+    "C:\\absolute\\path\\to\\workspace"
   ],
   "codexBin": null,
   "maxConcurrentJobs": 8
@@ -60,7 +60,7 @@ You can install and run `codex_setup` before writing local config. Task and revi
 From a clone of this repository:
 
 ```bash
-npm run install:cowork -- --allowlist /absolute/path/to/trusted/workspace
+npm run install:cowork -- --allowlist /absolute/path/to/workspace
 ```
 
 If no `--allowlist` is supplied and no config exists yet, the installer uses the repo checkout as the initial allowlist entry. When `--allowlist` is supplied, it replaces the existing `cwdAllowlist` rather than merging with it; repeat `--allowlist` for every folder you want to keep.
@@ -83,7 +83,7 @@ The default active-job cap is 8. To set it during clone-based setup:
 
 ```bash
 npm run install:cowork -- \
-  --allowlist /absolute/path/to/trusted/workspace \
+  --allowlist /absolute/path/to/workspace \
   --max-concurrent-jobs 8
 ```
 
@@ -105,7 +105,7 @@ If `codex_setup` cannot discover Codex automatically:
 
 ```bash
 npm run install:cowork -- \
-  --allowlist /absolute/path/to/trusted/workspace \
+  --allowlist /absolute/path/to/workspace \
   --codex-bin "$(command -v codex)"
 ```
 
@@ -113,7 +113,7 @@ Windows PowerShell:
 
 ```powershell
 npm run install:cowork -- `
-  --allowlist C:\absolute\path\to\trusted\workspace `
+  --allowlist C:\absolute\path\to\workspace `
   --codex-bin (where.exe codex | Select-Object -First 1)
 ```
 
@@ -153,7 +153,7 @@ claude plugin marketplace add (Get-Location).Path
 claude plugin install cowork-codex@cowork-codex --scope user
 ```
 
-Edit the local config file before use and replace `<trusted-host-workspace>` with a real host path.
+Edit the local config file before use and replace `<host-workspace>` with a real host path.
 
 ## Switching Back From a Local Clone to GitHub
 

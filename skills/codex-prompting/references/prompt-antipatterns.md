@@ -33,7 +33,7 @@ Better:
 Return:
 1. root cause
 2. evidence
-3. smallest safe next step
+3. smallest viable next step
 </structured_output_contract>
 ```
 

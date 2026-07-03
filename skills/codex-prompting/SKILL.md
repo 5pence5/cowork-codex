@@ -46,7 +46,7 @@ Only stop for missing details that materially change correctness or would cause 
 
 ## Add Blocks By Task Type
 
-- Implementation or debugging: add `completeness_contract`, `verification_loop`, and `action_safety`.
+- Implementation or debugging: add `completeness_contract`, `verification_loop`, and `action_scope`.
 - Research or recommendation: add `research_mode`, `grounding_rules`, and `citation_rules`.
 - Review or adversarial review: prefer `/review` or `/adversarial-review`; add focus text rather than replacing the built-in review contract.
 - Long-running work: add `progress_updates` and run in the background.

@@ -169,7 +169,7 @@ async function modeOf(path) {
 let exitCode = 0;
 
 try {
-  await expect("local config clamps unsafe defaults", async () => {
+  await expect("local config clamps unsupported defaults", async () => {
     const badConfig = join(tempRoot, "bad-config.json");
     await writeFile(badConfig, JSON.stringify({
       defaultProfile: "full-local-access",
@@ -598,7 +598,7 @@ process.exit(1);
   await expect("job store writes private log files", async () => {
     const oldUmask = process.umask(0o022);
     try {
-      const logsDir = join(tempRoot, "private-permission-logs");
+      const logsDir = join(tempRoot, "file-mode-logs");
       const store = new JobStore(tempRoot, { logsDir });
       await store.init();
       const job = await store.create({
@@ -607,7 +607,7 @@ process.exit(1);
         originalCwd: tempWorkspace,
         profile: "read-only",
         sandbox: "read-only",
-        prompt: "PRIVATE_PERMISSION_PROMPT"
+        prompt: "FILE_MODE_PROMPT"
       });
       await store.appendOut(job, "out\n");
       await store.appendErr(job, "err\n");
@@ -643,7 +643,7 @@ process.exit(1);
     await store.update(job.id, { status: "running", phase: "process.started", ownerPid: process.pid, pid: null });
     await store.sweepOrphans();
     const swept = store.get(job.id);
-    if (swept.status !== "failed" || swept.phase !== "orphaned") throw new Error(`live owner pid was trusted as ${swept.status}/${swept.phase}`);
+    if (swept.status !== "failed" || swept.phase !== "orphaned") throw new Error(`live owner pid was accepted as ${swept.status}/${swept.phase}`);
     if (store.activeCount() !== 0) throw new Error(`orphan remained active: ${store.activeCount()}`);
     return `ownerPid ${swept.ownerPid} marked ${swept.phase}`;
   });
@@ -933,7 +933,7 @@ setInterval(() => {}, 1000);
     return response.error.message;
   });
 
-  await expect("input validation rejects unsafe model", async () => {
+  await expect("input validation rejects invalid model", async () => {
     const response = await callTool("codex_start_task", {
       prompt: "Reply with exactly: SHOULD_NOT_RUN",
       cwd: tempWorkspace,

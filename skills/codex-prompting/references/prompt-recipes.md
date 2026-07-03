@@ -14,7 +14,7 @@ Use repository evidence and tool outputs to identify the most likely root cause.
 Return:
 1. most likely root cause
 2. evidence
-3. smallest safe next step
+3. smallest viable next step
 4. checks still needed, if any
 </structured_output_contract>
 
@@ -33,7 +33,7 @@ State exactly what evidence supports the diagnosis.
 
 ```xml
 <task>
-Implement the smallest safe fix for the stated issue in this repository.
+Implement the smallest viable fix for the stated issue in this repository.
 Preserve behavior outside the requested path.
 </task>
 
@@ -54,10 +54,10 @@ Do not stop after identifying the issue without applying the fix.
 Before finalizing, run or explain the most relevant checks for the changed behavior.
 </verification_loop>
 
-<action_safety>
+<action_scope>
 Keep edits tightly scoped.
 Avoid unrelated refactors, renames, formatting churn, or cleanup.
-</action_safety>
+</action_scope>
 ```
 
 ## Research

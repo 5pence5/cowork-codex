@@ -1,7 +1,7 @@
 {
   "defaultProfile": "workspace-write",
   "cwdAllowlist": [
-    "<trusted-host-workspace>"
+    "<host-workspace>"
   ],
   "codexBin": null,
   "maxConcurrentJobs": 8,

@@ -89,14 +89,14 @@ Start broad enough to avoid tunnel vision, then go deeper where the evidence cha
 </research_mode>
 ```
 
-## `action_safety`
+## `action_scope`
 
 ```xml
-<action_safety>
+<action_scope>
 Keep changes tightly scoped to the stated task.
 Avoid unrelated refactors, renames, formatting churn, or cleanup unless required for correctness.
 Call out broad or irreversible actions before taking them.
-</action_safety>
+</action_scope>
 ```
 
 ## `progress_updates`

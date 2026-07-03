@@ -18,7 +18,7 @@ function usage() {
   npm run install:cowork -- [options]
 
 Options:
-  --allowlist <path>      Trusted host folder. Repeat for multiple folders.
+  --allowlist <path>      Host workspace folder. Repeat for multiple folders.
   --config <path>         Config path. Defaults to the per-platform Cowork Codex config path.
   --codex-bin <path>      Absolute Codex binary path to write into config.
   --max-concurrent-jobs <n>

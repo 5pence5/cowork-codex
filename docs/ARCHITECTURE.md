@@ -13,7 +13,7 @@ Claude Cowork
 
 ## Host And Cowork Boundary
 
-Codex auth stays on the host machine. The Cowork VM may present paths such as `/sessions/<session>/mnt/<workspace>`, so the bridge maps those paths back onto trusted host folders before any Codex child process starts. This mapping is tested on macOS and experimental on Linux/Windows until validated in real Cowork sessions.
+Codex auth stays on the host machine. The Cowork VM may present paths such as `/sessions/<session>/mnt/<workspace>`, so the bridge maps those paths back onto configured host folders before any Codex child process starts. This mapping is tested on macOS and experimental on Linux/Windows until validated in real Cowork sessions.
 
 The MCP server is launched by `.mcp.json` through:
 
@@ -33,7 +33,7 @@ Installed-plugin config:
 
 Development runs may override this with `COWORK_CODEX_LOCAL_CONFIG`.
 
-The bridge denies task and review jobs when the config is missing or the allowlist is empty.
+The bridge returns a config error for task and review jobs when the config is missing or the allowlist is empty.
 
 `maxConcurrentJobs` defaults to 8 and is clamped from 1 to 8. Cowork can change this host-local value through the `codex_set_max_concurrent_jobs` MCP tool or `/concurrency` command.
 
@@ -59,9 +59,9 @@ This keeps the first release focused on making host-side Codex reliable from Cow
 
 ## Path Mapping
 
-`src/path-map.mjs` normalizes allowlist roots with `realpath`, builds candidate host paths from Cowork VM paths, and accepts a cwd only if it resolves inside exactly one allowlisted root.
+`src/path-map.mjs` normalizes allowlist roots with `realpath`, builds candidate host paths from Cowork VM paths, and accepts a cwd when it resolves inside exactly one allowlisted root.
 
-Ambiguous VM paths are rejected with an actionable error. This avoids silently choosing the wrong workspace when multiple allowlisted roots have the same basename.
+Ambiguous VM paths return an error with the matching candidate folders.
 
 ## Job Lifecycle
 
@@ -77,8 +77,8 @@ Each active task or review is a separate Codex CLI child process with its own jo
 - `workspace-write` maps to Codex workspace-write behavior and is the default.
 - `full-local-access` maps to Codex `danger-full-access`.
 
-Review jobs force read-only behavior.
+Review jobs use read-only behavior.
 
 ## Child Environment
 
-`src/child-env.mjs` passes a narrow environment to Codex, preserving only basic shell/user/locale values, platform path variables, and `CODEX_HOME`. It augments `PATH` with platform-specific npm and tool locations so Codex jobs can find tools when launched from a minimal plugin environment. `codex_setup` probes Codex with the same child environment used by real jobs.
+`src/child-env.mjs` passes a limited environment to Codex, preserving basic shell/user/locale values, platform path variables, and `CODEX_HOME`. It augments `PATH` with platform-specific npm and tool locations so Codex jobs can find tools when launched from a minimal plugin environment. `codex_setup` probes Codex with the same child environment used by real jobs.
