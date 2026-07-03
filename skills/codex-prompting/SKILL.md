@@ -8,7 +8,7 @@ user-invocable: false
 
 Use this skill before handing a non-trivial task to Cowork Codex through `/delegate` or `codex_delegate`.
 
-The guidance is model-neutral and intended for current Codex models, including GPT-5.5. Do not hard-code a model or effort level unless the user asks. Improve the prompt contract first; only escalate model or effort when the task genuinely needs it.
+The guidance is model-neutral and intended for current configured Codex models. Do not hard-code a model or effort level unless the user asks. Improve the prompt contract first; only escalate model or effort when the task genuinely needs it.
 
 ## Core Rules
 

@@ -53,9 +53,9 @@ Cowork Codex 0.1.x mirrors the OpenAI Codex Claude Code plugin at the workflow l
 | Resume latest or explicit thread | `resume` on `codex_delegate`, routed by `/delegate` |
 | Transfer current Claude Code session into Codex | Not included in 0.1.x |
 | Review gate hooks | Not included in 0.1.x |
-| Internal skills and Claude Code rescue agent | Replaced by Cowork-specific `cowork-codex` and `codex-prompting` skills plus MCP tool schemas |
+| Internal skills and Claude Code agent surfaces | Replaced by Cowork-specific `cowork-codex` and `codex-prompting` skills plus MCP tool schemas |
 
-This keeps the first release focused on making host-side Codex reliable from Cowork before adding Cowork-native orchestration that can go beyond the original plugin.
+This keeps the first release focused on making host-side Codex reliable from Cowork before adding further Cowork-specific orchestration.
 
 ## Path Mapping
 

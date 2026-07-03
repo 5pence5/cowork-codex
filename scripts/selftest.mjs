@@ -322,7 +322,7 @@ process.exit(1);
   });
 
   await expect("resume argv uses resume-supported flags", async () => {
-    const args = codexArgsForJob({ sandbox: "read-only", cwd: "/tmp/x", model: "gpt-5.5", effort: "high" }, {
+    const args = codexArgsForJob({ sandbox: "read-only", cwd: "/tmp/x", model: "codex-test-model", effort: "high" }, {
       prompt: "RESUME_PROMPT",
       resumeThreadId: "019f0000-0000-7000-8000-000000000000"
     });
@@ -331,7 +331,7 @@ process.exit(1);
     const sessionIndex = args.indexOf("019f0000-0000-7000-8000-000000000000");
     const separatorIndex = args.lastIndexOf("--");
     if (sessionIndex === -1 || separatorIndex <= sessionIndex) throw new Error(`resume prompt separator misplaced: ${args.join(" ")}`);
-    if (!args.includes("--model") || !args.includes("gpt-5.5")) throw new Error(`resume model missing: ${args.join(" ")}`);
+    if (!args.includes("--model") || !args.includes("codex-test-model")) throw new Error(`resume model missing: ${args.join(" ")}`);
     if (!args.includes('model_reasoning_effort="high"')) throw new Error(`resume effort missing: ${args.join(" ")}`);
     return args.join(" ");
   });

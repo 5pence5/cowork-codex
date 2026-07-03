@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.5 - 2026-07-03
+
+- Polished public release wording to foreground Cowork context conservation through Fable delegation.
+- Removed brittle model-specific wording from the prompting skill and README.
+- Replaced legacy Claude Code internal-agent references with neutral compatibility-scope wording.
+
 ## 0.1.4 - 2026-07-03
 
 - Added `codex_delegate` as the preferred MCP tool for Fable research and implementation delegation.

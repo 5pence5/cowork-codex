@@ -2,8 +2,8 @@
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "cowork-codex",
   "metadata": {
-    "description": "Cowork-focused Codex research and implementation plugin for Claude.",
-    "version": "0.1.4"
+    "description": "Delegate host Codex research and implementation from Claude Cowork while keeping Cowork context lighter.",
+    "version": "0.1.5"
   },
   "owner": {
     "name": "5pence5"
@@ -11,8 +11,8 @@
   "plugins": [
     {
       "name": "cowork-codex",
-      "description": "Use the Mac host Codex CLI from Claude Cowork for research, implementation, review, resume, status, result retrieval, and cancellation.",
-      "version": "0.1.4",
+      "description": "Delegate Mac host Codex research, implementation, review, resume, status, result retrieval, and cancellation from Claude Cowork.",
+      "version": "0.1.5",
       "author": {
         "name": "5pence5"
       },

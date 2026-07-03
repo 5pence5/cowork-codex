@@ -12,15 +12,15 @@ The 0.1.x line is compatibility-first. It intentionally keeps the user-facing wo
 
 It is not a byte-for-byte port of the Claude Code plugin internals. The OpenAI plugin uses Claude Code agents, hooks, and internal skills such as `codex-cli-runtime`, `codex-result-handling`, and `gpt-5-4-prompting`. Cowork Codex uses a Cowork-native MCP bridge plus Cowork-specific skills because the core problem is the Cowork host/VM boundary.
 
-Cowork Codex does include a `codex-prompting` skill. It adapts the OpenAI plugin's operator-style, block-structured prompting pattern for Cowork handoffs to current Codex models, including GPT-5.5.
+Cowork Codex does include a `codex-prompting` skill. It adapts the OpenAI plugin's operator-style, block-structured prompting pattern for Cowork handoffs to current configured Codex models.
 
 Current deliberate differences:
 
 - `/concurrency` is Cowork-specific.
-- `/transfer`, review-gate hooks, and the Claude Code `codex:codex-rescue` agent are not included in this release. Review-gate hooks are not planned for 0.1.x because Cowork does not expose an equivalent stop-hook surface.
+- `/transfer`, review-gate hooks, and Claude Code internal agent surfaces are not included in this release. Review-gate hooks are not planned for 0.1.x because Cowork does not expose an equivalent stop-hook surface.
 - `/critical-review` covers the challenge-review use case, but it is MCP-native rather than a direct copy of `/codex:adversarial-review`.
 
-Future versions can move beyond compatibility with richer job grouping, named subagents, research workflows, conflict-aware write coordination, and higher-level task planning.
+Future work may add Cowork-specific orchestration after the compatibility path is stable.
 
 ## Features
 
