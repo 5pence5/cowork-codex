@@ -12,6 +12,8 @@ import { collectCodexSetup, firstExecutablePathLine, readLocalConfig } from "../
 import { cancelActiveJobs, cancelJob, classifyError, codexArgsForJob, redactCodexArgs, resolveReviewSelection, startCodexJob, waitForJob } from "../src/codex-runner.mjs";
 import { defaultLogsDir, JobStore } from "../src/job-store.mjs";
 import { mapAndValidateCwd } from "../src/path-map.mjs";
+import { defaultConfigPath, defaultLogsPath, pathDelimiter } from "../src/platform.mjs";
+import { buildCommandInvocation } from "../src/command-invocation.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -225,7 +227,8 @@ if (forbidden.length) {
   console.error("forbidden env leaked: " + forbidden.join(","));
   process.exit(3);
 }
-if (!String(process.env.PATH || "").includes("/opt/homebrew/bin")) {
+const pathText = String(process.env.PATH || process.env.Path || "");
+if (!pathText.includes(".npm-global") && !pathText.includes("npm")) {
   console.error("child PATH was not augmented");
   process.exit(4);
 }
@@ -278,12 +281,14 @@ process.exit(1);
       if (name in env) throw new Error(`${name} leaked into child env`);
     }
     if (env.LC_ALL !== "C") throw new Error("LC_* should be preserved");
-    if (!env.PATH.includes("/opt/homebrew/bin")) throw new Error(`PATH missing Homebrew fallback: ${env.PATH}`);
+    if (process.platform === "darwin" && !env.PATH.includes("/opt/homebrew/bin")) {
+      throw new Error(`PATH missing Homebrew fallback: ${env.PATH}`);
+    }
     if (!env.PATH.includes("/home/user/.npm-global/bin")) throw new Error(`PATH missing npm fallback: ${env.PATH}`);
     return Object.keys(env).sort().join(", ");
   });
 
-  await expect("child PATH augments launchd-minimal path", async () => {
+  await expect("child PATH augments POSIX launchd-minimal path", async () => {
     const path = buildCodexChildPath({ PATH: "/usr/bin:/bin", HOME: "/Users/example" });
     const entries = path.split(":");
     for (const required of ["/usr/bin", "/bin", "/opt/homebrew/bin", "/usr/local/bin", "/Users/example/.npm-global/bin"]) {
@@ -291,6 +296,42 @@ process.exit(1);
     }
     if (entries.indexOf("/usr/bin") !== entries.lastIndexOf("/usr/bin")) throw new Error(`duplicate /usr/bin in ${path}`);
     return path;
+  });
+
+  await expect("child PATH handles Windows delimiter and npm locations", async () => {
+    const env = {
+      Path: "C:\\Windows\\System32;C:\\Program Files\\nodejs",
+      USERPROFILE: "C:\\Users\\example",
+      APPDATA: "C:\\Users\\example\\AppData\\Roaming",
+      LOCALAPPDATA: "C:\\Users\\example\\AppData\\Local",
+      ProgramFiles: "C:\\Program Files"
+    };
+    const path = buildCodexChildPath(env, { platform: "win32" });
+    const entries = path.split(";");
+    for (const required of [
+      "C:\\Windows\\System32",
+      "C:\\Program Files\\nodejs",
+      "C:\\Users\\example\\AppData\\Roaming\\npm",
+      "C:\\Users\\example\\AppData\\Local\\npm"
+    ]) {
+      if (!entries.includes(required)) throw new Error(`missing ${required} in ${path}`);
+    }
+    if (path.includes(":C:")) throw new Error(`used POSIX delimiter for Windows path: ${path}`);
+    return path;
+  });
+
+  await expect("platform config and log paths support Windows env", async () => {
+    const env = {
+      APPDATA: "C:\\Users\\example\\AppData\\Roaming",
+      LOCALAPPDATA: "C:\\Users\\example\\AppData\\Local",
+      USERPROFILE: "C:\\Users\\example"
+    };
+    const configPath = defaultConfigPath(env, "win32");
+    const logsPath = defaultLogsPath(env, "win32");
+    if (!configPath.includes("AppData")) throw new Error(`unexpected config path: ${configPath}`);
+    if (!logsPath.includes("Local")) throw new Error(`unexpected logs path: ${logsPath}`);
+    if (pathDelimiter("win32") !== ";") throw new Error("Windows delimiter was not semicolon");
+    return `${configPath} | ${logsPath}`;
   });
 
   await expect("classifyError uses word boundaries", async () => {
@@ -304,7 +345,7 @@ process.exit(1);
   await expect("default logs dir is outside the plugin root", async () => {
     const logsDir = defaultLogsDir(root);
     if (logsDir.startsWith(root)) throw new Error(`logs dir is inside repo: ${logsDir}`);
-    if (!logsDir.includes(join(".local", "state", "cowork-codex", "logs"))) {
+    if (!logsDir.includes(join("cowork-codex", "logs"))) {
       throw new Error(`unexpected logs dir: ${logsDir}`);
     }
     return logsDir;
@@ -315,10 +356,13 @@ process.exit(1);
     const reviewArgs = codexArgsForJob({ sandbox: "read-only", cwd: "/tmp/x" }, { prompt: flagLikePrompt, reviewSubcommand: true });
     const rSep = reviewArgs.lastIndexOf("--");
     if (rSep === -1) throw new Error("no -- separator in review argv");
-    if (!(reviewArgs.indexOf(flagLikePrompt) > rSep)) throw new Error("review focus not forced positional by --");
+    if (reviewArgs.includes(flagLikePrompt)) throw new Error(`review prompt leaked into argv: ${reviewArgs.join(" ")}`);
+    if (reviewArgs[rSep + 1] !== "-") throw new Error(`review focus not routed through stdin: ${reviewArgs.join(" ")}`);
     const taskArgs = codexArgsForJob({ sandbox: "workspace-write", cwd: "/tmp/x" }, { prompt: flagLikePrompt });
-    if (!(taskArgs.indexOf(flagLikePrompt) > taskArgs.lastIndexOf("--"))) throw new Error("task prompt not forced positional by --");
-    return "focus/prompt forced positional";
+    const tSep = taskArgs.lastIndexOf("--");
+    if (taskArgs.includes(flagLikePrompt)) throw new Error(`task prompt leaked into argv: ${taskArgs.join(" ")}`);
+    if (taskArgs[tSep + 1] !== "-") throw new Error(`task prompt not routed through stdin: ${taskArgs.join(" ")}`);
+    return "focus/prompt routed through stdin";
   });
 
   await expect("resume argv uses resume-supported flags", async () => {
@@ -331,6 +375,7 @@ process.exit(1);
     const sessionIndex = args.indexOf("019f0000-0000-7000-8000-000000000000");
     const separatorIndex = args.lastIndexOf("--");
     if (sessionIndex === -1 || separatorIndex <= sessionIndex) throw new Error(`resume prompt separator misplaced: ${args.join(" ")}`);
+    if (args[separatorIndex + 1] !== "-") throw new Error(`resume prompt not routed through stdin: ${args.join(" ")}`);
     if (!args.includes("--model") || !args.includes("codex-test-model")) throw new Error(`resume model missing: ${args.join(" ")}`);
     if (!args.includes('model_reasoning_effort="high"')) throw new Error(`resume effort missing: ${args.join(" ")}`);
     return args.join(" ");
@@ -339,10 +384,24 @@ process.exit(1);
   await expect("argv redaction omits prompt text", async () => {
     const marker = "PROMPT_MARKER_SHOULD_NOT_APPEAR";
     const args = codexArgsForJob({ sandbox: "workspace-write", cwd: tempWorkspace }, { prompt: marker });
-    const redacted = redactCodexArgs(args);
+    const redacted = redactCodexArgs(args, marker);
     if (redacted.join("\n").includes(marker)) throw new Error(`marker leaked in ${JSON.stringify(redacted)}`);
-    if (!redacted.some((arg) => arg.includes("prompt omitted"))) throw new Error(`no redaction marker in ${JSON.stringify(redacted)}`);
+    if (!redacted.some((arg) => arg.includes("stdin prompt omitted"))) throw new Error(`no redaction marker in ${JSON.stringify(redacted)}`);
     return redacted.slice(-2).join(" ");
+  });
+
+  await expect("Windows command shims are wrapped through cmd.exe", async () => {
+    const invocation = buildCommandInvocation("C:\\Users\\me\\AppData\\Roaming\\npm\\codex.cmd", ["exec", "--json", "--", "-"], {
+      platform: "win32",
+      env: { ComSpec: "C:\\Windows\\System32\\cmd.exe" }
+    });
+    if (invocation.command !== "C:\\Windows\\System32\\cmd.exe") throw new Error(`unexpected command ${invocation.command}`);
+    if (!invocation.args.includes("/c")) throw new Error(`missing /c: ${invocation.args.join(" ")}`);
+    const commandLine = invocation.args.at(-1);
+    if (!commandLine.includes("codex.cmd") || !commandLine.includes("--json")) {
+      throw new Error(`unexpected cmd line: ${commandLine}`);
+    }
+    return commandLine;
   });
 
   await expect("review argv target selection", async () => {
@@ -839,7 +898,7 @@ setInterval(() => {}, 1000);
   await expect("codex_setup", async () => {
     const response = await callTool("codex_setup");
     const setup = data(response);
-    if (setup.hostExecutionProof.platform !== "darwin") throw new Error(`expected darwin, got ${setup.hostExecutionProof.platform}`);
+    if (setup.hostExecutionProof.platform !== process.platform) throw new Error(`expected ${process.platform}, got ${setup.hostExecutionProof.platform}`);
     if ("home" in setup.hostExecutionProof || "cwd" in setup.hostExecutionProof || "uname" in setup.hostExecutionProof) {
       throw new Error("hostExecutionProof includes unredacted host fields");
     }
@@ -847,7 +906,9 @@ setInterval(() => {}, 1000);
       throw new Error("loginStatus includes unredacted output");
     }
     if (!setup.codex.resolvedPath) throw new Error("no Codex path");
-    if (!setup.childProcess?.path?.includes("/opt/homebrew/bin")) throw new Error(`child PATH missing fallback: ${setup.childProcess?.path}`);
+    if (process.platform === "darwin" && !setup.childProcess?.path?.includes("/opt/homebrew/bin")) {
+      throw new Error(`child PATH missing Homebrew fallback: ${setup.childProcess?.path}`);
+    }
     if (!setup.childProcess?.envPolicy?.includes("same scrubbed child environment")) throw new Error(`missing child env policy: ${setup.childProcess?.envPolicy}`);
     if (setup.localConfig.path !== tempConfig) throw new Error("temporary config not used");
     return setup.codex.version.text;
@@ -1073,26 +1134,26 @@ setInterval(() => {}, 1000);
     return String(result.finalMessage).slice(0, 120).replace(/\s+/g, " ");
   });
 
-  let criticalReviewId = null;
-  await expect("codex_start_review critical live job", async () => {
+  let adversarialReviewId = null;
+  await expect("codex_start_review adversarial live job", async () => {
     const response = await callTool("codex_start_review", {
       cwd: tempReviewWorkspace,
-      mode: "critical",
+      mode: "adversarial",
       scope: "working-tree",
       focus: "Focus only on review-target.js and the changed arithmetic."
     }, 240000);
     const started = data(response).job;
-    criticalReviewId = started.id;
+    adversarialReviewId = started.id;
     const job = await waitForToolJobComplete(started.id, 300);
-    if (job.status !== "completed") throw new Error(`critical review ${job.id} ended ${job.status}: ${job.errorMessage || ""}`);
+    if (job.status !== "completed") throw new Error(`adversarial review ${job.id} ended ${job.status}: ${job.errorMessage || ""}`);
     return `${job.id} ${job.reviewTarget || ""}`.trim();
   });
 
-  await expect("codex_job_result critical review has output", async () => {
-    const response = await callTool("codex_job_result", { id: criticalReviewId });
+  await expect("codex_job_result adversarial review has output", async () => {
+    const response = await callTool("codex_job_result", { id: adversarialReviewId });
     const result = data(response);
     if (!String(result.finalMessage || "").trim()) {
-      throw new Error(`critical review final message was empty: ${JSON.stringify(result)}`);
+      throw new Error(`adversarial review final message was empty: ${JSON.stringify(result)}`);
     }
     return String(result.finalMessage).slice(0, 120).replace(/\s+/g, " ");
   });

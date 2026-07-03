@@ -8,7 +8,7 @@ import { cancelActiveJobs, cancelJob, createRunnerContext, REVIEW_ENGINE, startC
 
 const SERVER_INFO = {
   name: "cowork-codex",
-  version: "0.1.6"
+  version: "0.1.7"
 };
 const PROTOCOL_VERSION = "2025-06-18";
 
@@ -61,7 +61,7 @@ const TOOLS = [
       properties: {
         prompt: { type: "string", minLength: 1 },
         cwd: { type: "string", minLength: 1 },
-        profile: { type: "string", enum: PROFILE_VALUES, description: "Permission profile. full-local-access is never a default; use it only when the user explicitly asks for that job." },
+        profile: { type: "string", enum: PROFILE_VALUES, description: "Permission profile for this job." },
         model: { type: "string", description: "Optional Codex model id. Must match ^[A-Za-z0-9._:-]+$." },
         effort: { type: "string", enum: EFFORT_VALUES },
         resume: { type: "string", description: "Use 'latest' for the latest completed thread in this workspace, or pass an explicit thread id matching ^[A-Za-z0-9-]+$." },
@@ -79,7 +79,7 @@ const TOOLS = [
       properties: {
         prompt: { type: "string", minLength: 1 },
         cwd: { type: "string", minLength: 1 },
-        profile: { type: "string", enum: PROFILE_VALUES, description: "Permission profile. full-local-access is never a default; use it only when the user explicitly asks for that job." },
+        profile: { type: "string", enum: PROFILE_VALUES, description: "Permission profile for this job." },
         model: { type: "string", description: "Optional Codex model id. Must match ^[A-Za-z0-9._:-]+$." },
         effort: { type: "string", enum: EFFORT_VALUES },
         resume: { type: "string", description: "Use 'latest' for the latest completed thread in this workspace, or pass an explicit thread id matching ^[A-Za-z0-9-]+$." },
@@ -90,13 +90,13 @@ const TOOLS = [
   },
   {
     name: "codex_start_review",
-    description: "Start a read-only Codex review. Standard mode uses codex exec review; critical mode uses a structured review prompt.",
+    description: "Start a read-only Codex review. Standard mode uses codex exec review; adversarial mode uses a structured review prompt.",
     inputSchema: {
       type: "object",
       required: ["cwd"],
       properties: {
         cwd: { type: "string", minLength: 1 },
-        mode: { type: "string", enum: ["standard", "critical"] },
+        mode: { type: "string", enum: ["standard", "adversarial"] },
         base: { type: "string", description: "Optional base ref. Must match ^[A-Za-z0-9._/-]+$." },
         commit: { type: "string", description: "Optional commit/ref. Must match ^[A-Za-z0-9._/-]+$." },
         scope: { type: "string", enum: REVIEW_SCOPE_VALUES, description: "Review target selection when base/commit are omitted." },

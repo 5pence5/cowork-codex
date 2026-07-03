@@ -7,4 +7,4 @@ Call `codex_delegate` with the user's prompt and cwd. Use `wait_seconds` for for
 
 For non-trivial research, diagnosis, or implementation tasks, compose the prompt using the `codex-prompting` skill before calling `codex_delegate`. Keep the final prompt compact, block-structured, and scoped to one Codex job. For `--resume`, send only the delta instruction unless the task direction changed materially.
 
-Use `profile: "full-local-access"` only when the user explicitly asks for that job to have full local access. Otherwise prefer `workspace-write`, or `read-only` for inspection-only work.
+Pass `--profile` through when supplied. Otherwise omit `profile` and let the bridge use its configured default; use `read-only` for inspection-only work.

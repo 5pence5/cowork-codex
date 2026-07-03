@@ -10,7 +10,7 @@ assignees: ""
 
 ## Environment
 
-- macOS version:
+- OS/platform:
 - Node version:
 - Codex CLI version:
 - Plugin version:
@@ -29,4 +29,3 @@ assignees: ""
 ## Relevant Output
 
 Paste redacted `codex_setup` output or job status/result details.
-

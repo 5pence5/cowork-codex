@@ -2,15 +2,15 @@
 import { access, copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import { execFile } from "node:child_process";
-import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { normalizeMaxConcurrentJobs } from "../src/codex-discovery.mjs";
+import { defaultConfigPath } from "../src/platform.mjs";
 
 const execFileAsync = promisify(execFile);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const defaultConfigPath = resolve(homedir(), ".config", "cowork-codex", "cowork-codex.local.json");
+const defaultInstallConfigPath = defaultConfigPath();
 const exampleConfigPath = resolve(root, ".local", "cowork-codex.local.json.example");
 
 function usage() {
@@ -18,8 +18,8 @@ function usage() {
   npm run install:cowork -- [options]
 
 Options:
-  --allowlist <path>      Trusted Mac host folder. Repeat for multiple folders.
-  --config <path>         Config path. Defaults to ~/.config/cowork-codex/cowork-codex.local.json.
+  --allowlist <path>      Trusted host folder. Repeat for multiple folders.
+  --config <path>         Config path. Defaults to the per-platform Cowork Codex config path.
   --codex-bin <path>      Absolute Codex binary path to write into config.
   --max-concurrent-jobs <n>
                            Active Codex job cap to write into config. Clamped from 1 to 8.
@@ -33,7 +33,7 @@ If no --allowlist is supplied and the config does not exist, the repo root is us
 function parseArgs(argv) {
   const options = {
     allowlist: [],
-    configPath: defaultConfigPath,
+    configPath: defaultInstallConfigPath,
     codexBin: null,
     maxConcurrentJobs: null,
     warnings: [],
@@ -111,10 +111,6 @@ async function main() {
   if (options.help) {
     console.log(usage());
     return;
-  }
-
-  if (process.platform !== "darwin") {
-    throw new Error("Cowork Codex is intended for a macOS host.");
   }
 
   const configExists = await exists(options.configPath);

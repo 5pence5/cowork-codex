@@ -1,14 +1,14 @@
 # Cowork Codex
 
-Cowork Codex gives Fable in Claude Cowork a Codex research and implementation subagent: the Codex CLI already installed and authenticated on your Mac. Fable coordinates; Codex researches, implements, reviews, and reports back, only inside folders you allowlist.
+Cowork Codex gives Fable in Claude Cowork a Codex research and implementation subagent: the Codex CLI already installed and authenticated on your host machine. Fable coordinates; Codex researches, implements, reviews, and reports back, only inside folders you allowlist.
 
 Use it to delegate research and implementation work to Codex while keeping the main Cowork thread lighter and conserving context and tokens.
 
 Cowork Codex is an unofficial community plugin and is not affiliated with OpenAI or Anthropic.
 
-Current 0.1.x releases target Claude Cowork on a macOS host.
+Current 0.1.x releases are tested on macOS hosts. Linux and Windows support is implemented for direct host paths and standard Node/Codex installs, but still needs real Cowork-session validation.
 
-It is designed for the Cowork host/VM split: Codex runs on the Mac where it is already authenticated, while Cowork can start tasks, reviews, resumes, and cancellations through a bundled stdio MCP server.
+It is designed for the Cowork host/VM split: Codex runs on the host where it is already authenticated, while Cowork can start tasks, reviews, resumes, and cancellations through a bundled stdio MCP server.
 
 ## Release Scope
 
@@ -22,7 +22,7 @@ Current deliberate differences:
 
 - `/concurrency` is Cowork-specific.
 - `/transfer`, review-gate hooks, and Claude Code internal agent surfaces are not included in this release. Review-gate hooks are not planned for 0.1.x because Cowork does not expose an equivalent stop-hook surface.
-- `/critical-review` covers the challenge-review use case, but it is MCP-native rather than a direct copy of `/codex:adversarial-review`.
+- `/adversarial-review` covers the challenge-review use case through the MCP bridge.
 
 Future work may add Cowork-specific orchestration after the compatibility path is stable.
 
@@ -30,32 +30,33 @@ Future work may add Cowork-specific orchestration after the compatibility path i
 
 - Host-side Codex discovery, version, login, config, and active-job diagnostics through `codex_setup`.
 - Background or foreground Codex research and implementation jobs through `codex_delegate` and `/delegate`.
-- Standard and critical read-only review jobs through `codex_start_review`.
+- Standard and adversarial read-only review jobs through `codex_start_review`.
 - Delegated job management through `/status`, `/result`, and `/cancel`, backed by `codex_job_status`, `codex_job_result`, and `codex_cancel_job`.
 - Multiple active Codex jobs, bounded by `maxConcurrentJobs` (`8` by default, clamped from `1` to `8`).
 - Cowork-visible concurrency tuning through `codex_set_max_concurrent_jobs` and `/concurrency`.
 - Cowork-native `codex-prompting` skill for compact, block-structured implementation, research, and diagnosis handoffs.
-- Cowork `/sessions/<session>/mnt/...` path mapping to trusted Mac host folders.
-- `workspace-write` default for implementation and delegation work, with broad local access available only as an explicit per-job profile.
+- Cowork `/sessions/<session>/mnt/...` path mapping to trusted host folders, tested on macOS and experimental elsewhere.
+- `workspace-write` default for implementation and delegation work.
 - Local JSONL/stdout/stderr job logs under the user's state directory.
 
 ## Trust And Permissions
 
 - Jobs run only inside folders listed in `cwdAllowlist`; paths are `realpath`-checked and ambiguous Cowork VM mappings are rejected.
-- The default task profile is `workspace-write`; broad local access is never a default and must be requested per job.
+- The default task profile is `workspace-write`.
 - Review jobs are always read-only.
 - Codex jobs run with a narrow child environment, and local job logs are private to your user (`0700` directories, `0600` files).
 
 ## Requirements
 
-- macOS host.
-- Node.js 18 or newer.
-- Authenticated Codex CLI on the Mac host.
+- Node.js 18.18 or newer.
+- Authenticated Codex CLI on the host machine.
 - Claude plugin environment that resolves `${CLAUDE_PLUGIN_ROOT}` in `.mcp.json`.
 
 ## Quick Install
 
-Create the local config with at least one trusted Mac host workspace:
+Create the local config with at least one trusted host workspace.
+
+Linux/macOS:
 
 ```bash
 mkdir -p ~/.config/cowork-codex
@@ -69,6 +70,22 @@ cat > ~/.config/cowork-codex/cowork-codex.local.json <<'JSON'
   "maxConcurrentJobs": 8
 }
 JSON
+```
+
+Windows PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force "$env:APPDATA\cowork-codex" | Out-Null
+@'
+{
+  "defaultProfile": "workspace-write",
+  "cwdAllowlist": [
+    "C:\\absolute\\path\\to\\trusted\\workspace"
+  ],
+  "codexBin": null,
+  "maxConcurrentJobs": 8
+}
+'@ | Set-Content "$env:APPDATA\cowork-codex\cowork-codex.local.json"
 ```
 
 Add this repo as a Claude plugin marketplace and install the plugin:
@@ -91,7 +108,7 @@ Run `/reload-plugins`, then verify the `cowork-codex` MCP server and tools are v
 The Claude plugin install is the distribution unit. It installs the bundled MCP server, slash commands, and skills together:
 
 - MCP tools: `codex_setup`, `codex_delegate`, `codex_job_status`, `codex_job_result`, `codex_cancel_job`, and related review/config tools.
-- Slash commands: `/delegate`, `/status`, `/result`, `/cancel`, `/review`, `/critical-review`, `/setup`, and `/concurrency`.
+- Slash commands: `/delegate`, `/status`, `/result`, `/cancel`, `/review`, `/adversarial-review`, `/setup`, and `/concurrency`.
 - Skills: `cowork-codex` and `codex-prompting`.
 
 You can install and run `codex_setup` before writing any config; task and review jobs stay disabled until `cwdAllowlist` contains at least one real folder.
@@ -103,7 +120,8 @@ See [docs/INSTALL.md](docs/INSTALL.md) for clone-based install, dry-run, multipl
 The installed plugin reads:
 
 ```text
-~/.config/cowork-codex/cowork-codex.local.json
+Linux/macOS: ~/.config/cowork-codex/cowork-codex.local.json
+Windows: %APPDATA%\cowork-codex\cowork-codex.local.json
 ```
 
 Example config:
@@ -124,19 +142,19 @@ Set `COWORK_CODEX_LOCAL_CONFIG` only for direct development runs when you want t
 Fields:
 
 - `defaultProfile`: `read-only` or `workspace-write`. Unsupported values are ignored and the bridge uses `workspace-write`.
-- `cwdAllowlist`: trusted Mac host folders where jobs may run. Placeholder entries beginning with `<` are ignored.
+- `cwdAllowlist`: trusted host folders where jobs may run. Placeholder entries beginning with `<` are ignored.
 - `codexBin`: optional absolute Codex binary path. Leave `null` to auto-discover.
 - `maxConcurrentJobs`: active Codex job cap. Defaults to 8 and is clamped from 1 to 8. Change it in the JSON config, with `npm run install:cowork -- --max-concurrent-jobs <n>`, or from Cowork with `/concurrency <n>`.
 
-`cwdAllowlist` may point at an exact workspace or a trusted parent folder. For Cowork VM paths such as `/sessions/<session>/mnt/<workspace>`, the bridge first tries host-absolute mapping and then maps the VM workspace basename back onto matching allowlisted host folders. Ambiguous mappings are rejected; use a host-absolute Mac path or narrow the allowlist.
+`cwdAllowlist` may point at an exact workspace or a trusted parent folder. For Cowork VM paths such as `/sessions/<session>/mnt/<workspace>`, the bridge first tries host-absolute mapping and then maps the VM workspace basename back onto matching allowlisted host folders. Ambiguous mappings are rejected; use a host-absolute path or narrow the allowlist.
 
 ## Permission Profiles
 
 - `read-only`: for inspection and review.
 - `workspace-write`: default for implementation and delegation work.
-- `full-local-access`: explicit per-job opt-in only.
+- `full-local-access`: maps to Codex `danger-full-access`.
 
-Reviews force read-only behavior. `full-local-access` cannot be configured as the default.
+Reviews force read-only behavior. `defaultProfile` accepts `read-only` or `workspace-write`.
 
 ## Usage
 
@@ -158,7 +176,7 @@ For `/delegate` and direct `codex_delegate` use, Cowork should shape non-trivial
 Typical flow:
 
 1. Run `codex_setup`.
-2. Start a task with `/delegate` or a review with `/review` or `/critical-review`.
+2. Start a task with `/delegate` or a review with `/review` or `/adversarial-review`.
 3. Poll delegated jobs with `/status <job-id>`.
 4. Fetch final output with `/result <job-id>`.
 5. Cancel long-running delegated jobs with `/cancel <job-id>`.
@@ -186,7 +204,7 @@ Manual Cowork checks live in [docs/COWORK_VALIDATION.md](docs/COWORK_VALIDATION.
 Job metadata and logs are stored under:
 
 ```text
-~/.local/state/cowork-codex/logs/
+~/.local/state/cowork-codex/logs/ on Linux/macOS, or %LOCALAPPDATA%\cowork-codex\logs on Windows
 ```
 
 The log directory is created as `0700`; job files are created as `0600`. Logs are append-only until deleted and may include Codex output and final messages.
@@ -195,6 +213,12 @@ Clear local job history:
 
 ```bash
 rm -rf ~/.local/state/cowork-codex/logs
+```
+
+Windows PowerShell:
+
+```powershell
+Remove-Item -Recurse -Force "$env:LOCALAPPDATA\cowork-codex\logs"
 ```
 
 ## Docs
@@ -208,9 +232,9 @@ rm -rf ~/.local/state/cowork-codex/logs
 
 ## Troubleshooting
 
-- If `codex_setup` cannot find Codex, set `codexBin` in `~/.config/cowork-codex/cowork-codex.local.json` to the absolute host path from `command -v codex`.
-- If the MCP server does not start, confirm Claude resolves `${CLAUDE_PLUGIN_ROOT}` and that Node is available on `PATH` or one of the fallback locations checked by `bin/cowork-codex-mcp`.
-- If a Cowork `/sessions/.../mnt/...` cwd is rejected, add the exact Mac workspace path to `cwdAllowlist` and retry.
+- If `codex_setup` cannot find Codex, set `codexBin` in the local config to the absolute host path from `command -v codex` on Linux/macOS or `where.exe codex` on Windows.
+- If the MCP server does not start, confirm Claude resolves `${CLAUDE_PLUGIN_ROOT}` and that Node is available on `PATH`.
+- If a Cowork `/sessions/.../mnt/...` cwd is rejected, add the exact host workspace path to `cwdAllowlist` and retry.
 - If child tools such as `npm` are missing during Codex jobs, inspect `codex_setup.childProcess.path`.
 
 ## Release Packaging

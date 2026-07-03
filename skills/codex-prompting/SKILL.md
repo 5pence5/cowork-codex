@@ -48,7 +48,7 @@ Only stop for missing details that materially change correctness or would cause 
 
 - Implementation or debugging: add `completeness_contract`, `verification_loop`, and `action_safety`.
 - Research or recommendation: add `research_mode`, `grounding_rules`, and `citation_rules`.
-- Review or critical review: prefer `/review` or `/critical-review`; add focus text rather than replacing the built-in review contract.
+- Review or adversarial review: prefer `/review` or `/adversarial-review`; add focus text rather than replacing the built-in review contract.
 - Long-running work: add `progress_updates` and run in the background.
 
 ## Cowork Handoff Rules

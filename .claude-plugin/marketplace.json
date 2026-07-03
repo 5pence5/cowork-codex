@@ -2,8 +2,8 @@
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "cowork-codex",
   "metadata": {
-    "description": "Let Fable delegate Mac host Codex research and implementation from Claude Cowork while keeping the main Cowork thread lighter.",
-    "version": "0.1.6"
+    "description": "Use host Codex from Claude Cowork to review code or delegate tasks.",
+    "version": "0.1.7"
   },
   "owner": {
     "name": "5pence5"
@@ -11,8 +11,8 @@
   "plugins": [
     {
       "name": "cowork-codex",
-      "description": "Let Fable delegate Mac host Codex research, implementation, review, resume, status, result retrieval, and cancellation from Claude Cowork while keeping the main Cowork thread lighter.",
-      "version": "0.1.6",
+      "description": "Use host Codex from Claude Cowork to review code or delegate tasks.",
+      "version": "0.1.7",
       "author": {
         "name": "5pence5"
       },

@@ -1,7 +1,7 @@
 import { appendFile, chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { defaultLogsPath } from "./platform.mjs";
 
 const RUNNING_STATES = new Set(["queued", "running"]);
 const TERMINAL_STATES = new Set(["completed", "failed", "cancelled", "rejected"]);
@@ -233,5 +233,5 @@ export class JobStore {
 }
 
 export function defaultLogsDir(rootDir) {
-  return resolve(homedir(), ".local", "state", "cowork-codex", "logs");
+  return defaultLogsPath();
 }

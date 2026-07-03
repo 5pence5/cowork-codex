@@ -37,13 +37,13 @@ export async function normalizeAllowlist(allowlist = []) {
 
 export async function mapAndValidateCwd(inputCwd, localConfig) {
   if (!inputCwd || typeof inputCwd !== "string") {
-    throw new Error("cwd is required. Provide a Mac host path or a Cowork /sessions/<user>/mnt/<workspace> path.");
+    throw new Error("cwd is required. Provide a host path or a Cowork /sessions/<user>/mnt/<workspace> path.");
   }
 
   const configPath = localConfig?.path || "COWORK_CODEX_LOCAL_CONFIG";
   const allowlistRoots = await normalizeAllowlist(localConfig?.cwdAllowlist || []);
   if (!localConfig?.exists || allowlistRoots.length === 0) {
-    throw new Error(`No cwd allowlist is configured. Copy .local/cowork-codex.local.json.example to ${configPath}, set cwdAllowlist to trusted Mac folders, and retry.`);
+    throw new Error(`No cwd allowlist is configured. Copy .local/cowork-codex.local.json.example to ${configPath}, set cwdAllowlist to trusted host folders, and retry.`);
   }
 
   const candidates = [];
@@ -104,8 +104,8 @@ export async function mapAndValidateCwd(inputCwd, localConfig) {
 
   if (distinctCwds.length > 1) {
     const choices = distinctCwds.map((match) => match.cwd).join(", ");
-    throw new Error(`cwd maps to multiple allowlisted host folders: ${inputCwd}. Matched: ${choices}. Pass a host-absolute Mac path or narrow ${configPath} cwdAllowlist.`);
+    throw new Error(`cwd maps to multiple allowlisted host folders: ${inputCwd}. Matched: ${choices}. Pass a host-absolute path or narrow ${configPath} cwdAllowlist.`);
   }
 
-  throw new Error(`cwd is outside the configured allowlist or does not exist: ${inputCwd}. Update ${configPath} cwdAllowlist with the trusted Mac host folder. ${lastError?.message || ""}`.trim());
+  throw new Error(`cwd is outside the configured allowlist or does not exist: ${inputCwd}. Update ${configPath} cwdAllowlist with the trusted host folder. ${lastError?.message || ""}`.trim());
 }

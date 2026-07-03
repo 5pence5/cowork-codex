@@ -1,8 +1,10 @@
 # Limitations
 
-## macOS Host Only
+## Platform Support
 
-The 0.1.x plugin is built for Claude Cowork on a Mac host. The launcher and path assumptions are macOS-oriented.
+The 0.1.x plugin is tested on macOS hosts. The runtime includes platform-aware config, log, PATH, Codex binary discovery, and Windows command-shim handling. Linux and Windows still need real Cowork-session validation.
+
+Cowork `/sessions/<session>/mnt/...` path mapping is tested on macOS and experimental elsewhere. Direct host-absolute `cwd` paths are the safest option on Linux and Windows.
 
 ## Manual Sync Discipline
 
@@ -12,10 +14,16 @@ Do not run write-capable Codex jobs while Cowork is actively editing the same fi
 
 Job logs are append-only until deleted. There is no compaction or retention policy yet.
 
-Clear logs manually:
+Clear logs manually on Linux/macOS:
 
 ```bash
 rm -rf ~/.local/state/cowork-codex/logs
+```
+
+Windows PowerShell:
+
+```powershell
+Remove-Item -Recurse -Force "$env:LOCALAPPDATA\cowork-codex\logs"
 ```
 
 ## Restarted Jobs
@@ -28,6 +36,6 @@ The job store assumes one active Cowork Codex server per user state directory. R
 
 The current release path is adding this GitHub repo as a Claude plugin marketplace or installing from a tracked-source zip. There is no npm distribution or Anthropic-hosted marketplace listing yet.
 
-## Broad Local Access
+## Profiles
 
-`full-local-access` is available only as an explicit per-job profile. It cannot be configured as the default.
+`defaultProfile` accepts `read-only` or `workspace-write`. The `full-local-access` job profile maps to Codex `danger-full-access`.

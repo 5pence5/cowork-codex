@@ -1,6 +1,6 @@
 # Architecture
 
-Cowork Codex bridges Claude Cowork to the Mac host Codex CLI.
+Cowork Codex bridges Claude Cowork to the host Codex CLI.
 
 ```text
 Claude Cowork
@@ -13,22 +13,22 @@ Claude Cowork
 
 ## Host And Cowork Boundary
 
-Codex auth stays on the Mac host. The Cowork VM may present paths such as `/sessions/<session>/mnt/<workspace>`, so the bridge maps those paths back onto trusted host folders before any Codex child process starts.
+Codex auth stays on the host machine. The Cowork VM may present paths such as `/sessions/<session>/mnt/<workspace>`, so the bridge maps those paths back onto trusted host folders before any Codex child process starts. This mapping is tested on macOS and experimental on Linux/Windows until validated in real Cowork sessions.
 
 The MCP server is launched by `.mcp.json` through:
 
 ```text
-${CLAUDE_PLUGIN_ROOT}/bin/cowork-codex-mcp
+node ${CLAUDE_PLUGIN_ROOT}/servers/cowork-codex-mcp.mjs
 ```
 
-The launcher resolves Node from `PATH` and common macOS locations.
+The plugin launches the bundled stdio MCP server with host `node`. Node.js 18.18 or newer must be visible to the Claude plugin environment.
 
 ## Config
 
 Installed-plugin config:
 
 ```text
-~/.config/cowork-codex/cowork-codex.local.json
+~/.config/cowork-codex/cowork-codex.local.json on Linux/macOS, or %APPDATA%\cowork-codex\cowork-codex.local.json on Windows
 ```
 
 Development runs may override this with `COWORK_CODEX_LOCAL_CONFIG`.
@@ -46,7 +46,7 @@ Cowork Codex 0.1.x mirrors the OpenAI Codex Claude Code plugin at the workflow l
 | Setup readiness check | `codex_setup`, `/setup` |
 | Research or implementation delegation | `codex_delegate`, `/delegate` |
 | Review | `codex_start_review`, `/review` |
-| Adversarial review | `/critical-review` as the MCP-native challenge-review path |
+| Adversarial review | `/adversarial-review` |
 | Status | `codex_job_status`, `/status` |
 | Result retrieval | `codex_job_result`, `/result` |
 | Cancellation | `codex_cancel_job`, `/cancel` |
@@ -75,10 +75,10 @@ Each active task or review is a separate Codex CLI child process with its own jo
 
 - `read-only` maps to Codex read-only behavior.
 - `workspace-write` maps to Codex workspace-write behavior and is the default.
-- `full-local-access` maps to `danger-full-access` and is explicit per job only.
+- `full-local-access` maps to Codex `danger-full-access`.
 
 Review jobs force read-only behavior.
 
 ## Child Environment
 
-`src/child-env.mjs` passes a narrow environment to Codex, preserving only basic shell/user/locale values and `CODEX_HOME`. It augments `PATH` with common macOS and user npm locations so Codex jobs can find tools when launched from a minimal plugin environment. `codex_setup` probes Codex with the same child environment used by real jobs.
+`src/child-env.mjs` passes a narrow environment to Codex, preserving only basic shell/user/locale values, platform path variables, and `CODEX_HOME`. It augments `PATH` with platform-specific npm and tool locations so Codex jobs can find tools when launched from a minimal plugin environment. `codex_setup` probes Codex with the same child environment used by real jobs.

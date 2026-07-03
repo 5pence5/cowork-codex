@@ -1,14 +1,16 @@
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join } from "node:path";
+import { dirname, join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { buildCodexChildEnv, buildCodexChildPath } from "./child-env.mjs";
+import { codexExecutableNames, defaultConfigPath, isHostAbsolutePath, pathEnvKey, pathEnvValue, toolBinDirs } from "./platform.mjs";
+import { buildCommandInvocation } from "./command-invocation.mjs";
 
 const execFileAsync = promisify(execFile);
 const TESTED_CODEX_VERSION = "codex-cli 0.142.5";
-const DEFAULT_LOCAL_CONFIG_PATH = join(homedir(), ".config", "cowork-codex", "cowork-codex.local.json");
+const DEFAULT_LOCAL_CONFIG_PATH = defaultConfigPath();
 const DEFAULT_PROFILE_VALUES = new Set(["read-only", "workspace-write"]);
 const DEFAULT_MAX_CONCURRENT_JOBS = 8;
 const MAX_CONCURRENT_JOBS_LIMIT = 8;
@@ -18,7 +20,7 @@ export { DEFAULT_LOCAL_CONFIG_PATH, DEFAULT_MAX_CONCURRENT_JOBS, MAX_CONCURRENT_
 async function isExecutable(path) {
   if (!path) return false;
   try {
-    await access(path, constants.X_OK);
+    await access(path, process.platform === "win32" ? constants.F_OK : constants.X_OK);
     return true;
   } catch {
     return false;
@@ -28,7 +30,7 @@ async function isExecutable(path) {
 export async function firstExecutablePathLine(stdout = "") {
   for (const line of String(stdout).split(/\r?\n/)) {
     const candidate = line.trim();
-    if (candidate && isAbsolute(candidate) && await isExecutable(candidate)) {
+    if (candidate && isHostAbsolutePath(candidate) && await isExecutable(candidate)) {
       return candidate;
     }
   }
@@ -48,7 +50,10 @@ export function parseCodexLoginStatus(loginText = "", commandOk = false) {
 
 async function run(command, args, options = {}) {
   try {
-    const { stdout, stderr } = await execFileAsync(command, args, {
+    const invocation = buildCommandInvocation(command, args, { env: options.env ?? process.env });
+    const { stdout, stderr } = await execFileAsync(invocation.command, invocation.args, {
+      ...invocation.options,
+      windowsHide: true,
       timeout: options.timeout ?? 10000,
       maxBuffer: options.maxBuffer ?? 1024 * 1024,
       env: options.env ?? process.env
@@ -71,6 +76,7 @@ async function run(command, args, options = {}) {
 
 export async function resolveCodexBinary(env = process.env, localConfig = null) {
   const attempts = [];
+  const childPath = buildCodexChildPath(env);
 
   if (env.CODEX_BIN) {
     const candidate = env.CODEX_BIN;
@@ -90,32 +96,34 @@ export async function resolveCodexBinary(env = process.env, localConfig = null) 
     }
   }
 
-  const shellResult = await run("/bin/zsh", ["-lc", "command -v codex"], {
-    env: {
-      ...env,
-      PATH: buildCodexChildPath(env)
-    }
+  const lookupCommand = process.platform === "win32" ? "where.exe" : "/bin/sh";
+  const lookupArgs = process.platform === "win32" ? ["codex"] : ["-lc", "command -v codex"];
+  const lookupEnv = { ...env };
+  lookupEnv[pathEnvKey(lookupEnv)] = childPath;
+  const shellResult = await run(lookupCommand, lookupArgs, {
+    env: lookupEnv
   });
   const shellPath = shellResult.ok ? await firstExecutablePathLine(shellResult.stdout) : "";
   const shellStdoutLineCount = shellResult.stdout ? shellResult.stdout.split(/\r?\n/).filter(Boolean).length : 0;
   const shellOk = Boolean(shellPath);
   attempts.push({
-    step: "login-shell-command-v",
-    command: "/bin/zsh -lc 'command -v codex'",
+    step: "path-command-lookup",
+    command: process.platform === "win32" ? "where.exe codex" : "/bin/sh -lc 'command -v codex'",
     path: shellPath || null,
     ok: shellOk,
     ignoredStdoutLines: Math.max(0, shellStdoutLineCount - (shellPath ? 1 : 0)) || undefined,
     stderr: shellResult.stderr || undefined
   });
   if (shellOk) {
-    return { path: shellPath, foundBy: "login-shell-command-v", attempts };
+    return { path: shellPath, foundBy: "path-command-lookup", attempts };
   }
 
-  const knownLocations = [
-    join(homedir(), ".npm-global/bin/codex"),
-    "/opt/homebrew/bin/codex",
-    "/usr/local/bin/codex"
-  ];
+  const knownLocations = [];
+  for (const dir of toolBinDirs(env)) {
+    for (const name of codexExecutableNames()) {
+      knownLocations.push(join(dir, name));
+    }
+  }
 
   for (const candidate of knownLocations) {
     const ok = await isExecutable(candidate);
@@ -129,13 +137,13 @@ export async function resolveCodexBinary(env = process.env, localConfig = null) 
 }
 
 export function localConfigPath(env = process.env) {
-  return env.COWORK_CODEX_LOCAL_CONFIG || DEFAULT_LOCAL_CONFIG_PATH;
+  return env.COWORK_CODEX_LOCAL_CONFIG || defaultConfigPath(env);
 }
 
 function normalizeDefaultProfile(value, warnings) {
   if (value === undefined || value === null || value === "") return "workspace-write";
   if (DEFAULT_PROFILE_VALUES.has(value)) return value;
-  warnings.push(`Ignoring unsupported defaultProfile "${String(value)}"; using workspace-write. Use full-local-access only as an explicit per-job profile.`);
+  warnings.push(`Ignoring unsupported defaultProfile "${String(value)}"; using workspace-write.`);
   return "workspace-write";
 }
 
@@ -310,7 +318,7 @@ export async function collectCodexSetup(env = process.env) {
       execPath: process.execPath
     },
     childProcess: {
-      path: childEnv.PATH,
+      path: pathEnvValue(childEnv),
       envPolicy: "codex setup probes use the same scrubbed child environment as Codex jobs"
     },
     localConfig,

@@ -20,7 +20,7 @@ Use this checklist after installing or updating the plugin in Claude Cowork.
 ## Setup
 
 1. Run `codex_setup`.
-2. Confirm `hostExecutionProof.platform` is `darwin`.
+2. Confirm `hostExecutionProof.platform` matches the host where the plugin is installed.
 3. Confirm Codex resolves to the expected host binary.
 4. Confirm Codex reports the expected version.
 5. Confirm Codex is logged in.
@@ -40,15 +40,15 @@ Use this checklist after installing or updating the plugin in Claude Cowork.
 
 1. From Cowork, capture the current cwd.
 2. If it is a `/sessions/<session>/mnt/...` path, start a read-only Codex task using that cwd.
-3. Confirm the returned job summary maps to the intended Mac host folder.
-4. Try the same operation with the explicit Mac host path and confirm it maps to the same folder.
+3. Confirm the returned job summary maps to the intended host folder.
+4. Try the same operation with the explicit host path and confirm it maps to the same folder.
 
 ## Workspace Sync Sentinel
 
-1. From the Mac host, write a small sentinel file in an allowlisted connected folder.
+1. From the host machine, write a small sentinel file in an allowlisted connected folder.
 2. In Cowork, confirm the VM sees it.
 3. From Cowork, write a second sentinel file in the same folder.
-4. On the Mac host, confirm it appears.
+4. On the host machine, confirm it appears.
 5. Repeat with an edit to an existing sentinel file.
 
 ## Workspace-Write Task
@@ -59,13 +59,13 @@ Run a small `workspace-write` task in an allowlisted disposable repo:
 Run `node --version && npm --version`, then create cowork-codex-smoke.txt containing "ok".
 ```
 
-Confirm the file appears on the Mac host and Cowork sees it.
+Confirm the file appears on the host machine and Cowork sees it.
 
 ## Review Jobs
 
 1. Make a small intentional working-tree change in a test repo.
 2. Run a standard review with focus text.
-3. Run a critical review with focus text.
+3. Run an adversarial review with focus text.
 4. Confirm both complete and return findings.
 
 ## Cancellation

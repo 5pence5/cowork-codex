@@ -1,10 +1,10 @@
-import { spawn } from "node:child_process";
-import { execFile } from "node:child_process";
+import { execFile, spawn, spawnSync } from "node:child_process";
 import readline from "node:readline";
 import { promisify } from "node:util";
 import { DEFAULT_MAX_CONCURRENT_JOBS, localConfigPath, readLocalConfig, resolveCodexBinary } from "./codex-discovery.mjs";
 import { mapAndValidateCwd } from "./path-map.mjs";
 import { buildCodexChildEnv } from "./child-env.mjs";
+import { buildCommandInvocation } from "./command-invocation.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -21,7 +21,7 @@ const REVIEW_SCOPES = new Set(["auto", "working-tree", "branch"]);
 
 export const REVIEW_ENGINE = {
   path: "codex exec review",
-  reason: "`codex exec review --help` is available locally and supports --json, --base, --commit, and --model. The bridge uses it for standard review when no focus text is supplied; focused standard review and critical review use a structured prompt via codex exec --json so focus text is preserved."
+  reason: "`codex exec review --help` is available locally and supports --json, --base, --commit, and --model. The bridge uses it for standard review when no focus text is supplied; focused standard review and adversarial review use a structured prompt via codex exec --json so focus text is preserved."
 };
 
 function sleep(ms) {
@@ -38,15 +38,15 @@ export function classifyError(message = "") {
 function profileToSandbox(profile) {
   const sandbox = SANDBOX_BY_PROFILE[profile];
   if (!sandbox) {
-    throw new Error(`Unsupported profile "${profile}". Use read-only, workspace-write, or explicit full-local-access.`);
+    throw new Error(`Unsupported profile "${profile}". Use read-only, workspace-write, or full-local-access.`);
   }
   return sandbox;
 }
 
 function buildReviewPrompt({ mode, focus, base, commit, targetLabel }) {
   const lines = [
-    mode === "critical"
-      ? "Run a critical code review. Check implementation and design assumptions, look for hidden failure modes, and do not apply patches."
+    mode === "adversarial"
+      ? "Run an adversarial code review. Challenge the implementation approach, design choices, tradeoffs, and assumptions. Do not apply patches."
       : "Run a code review. Focus on correctness, regressions, missing tests, and operational risks. Do not apply patches.",
     targetLabel ? `Review target: ${targetLabel}` : null,
     base ? `Base branch/reference: ${base}` : null,
@@ -178,18 +178,22 @@ export function codexArgsForJob(job, options) {
 
   if (!isReviewSubcommand || options.prompt) {
     // Codex parses dash-leading positional text as flags unless separated. The
-    // "--" separator keeps caller text as prompt text instead of CLI options.
-    args.push("--", options.prompt || "");
+    // "--" separator keeps stdin prompt routing positional instead of an option.
+    args.push("--", "-");
   }
   return args;
 }
 
-export function redactCodexArgs(args) {
+export function redactCodexArgs(args, promptText = null) {
   const redacted = [...args];
   const separator = redacted.lastIndexOf("--");
   if (separator !== -1 && separator < redacted.length - 1) {
-    const prompt = String(redacted[separator + 1] || "");
-    redacted.splice(separator + 1, redacted.length - separator - 1, `<prompt omitted: ${prompt.length} chars>`);
+    if (promptText !== null) {
+      redacted.splice(separator + 1, redacted.length - separator - 1, `<stdin prompt omitted: ${String(promptText).length} chars>`);
+    } else {
+      const prompt = String(redacted[separator + 1] || "");
+      redacted.splice(separator + 1, redacted.length - separator - 1, `<prompt omitted: ${prompt.length} chars>`);
+    }
   }
   return redacted;
 }
@@ -328,6 +332,7 @@ export async function startCodexJob(ctx, input) {
     commit: reviewSelection.commit,
     uncommitted: reviewSelection.uncommitted
   });
+  const stdinPrompt = (!reviewSubcommand || prompt) ? String(prompt || "") : null;
 
   const pendingIo = new Set();
   const track = (promise) => {
@@ -358,7 +363,7 @@ export async function startCodexJob(ctx, input) {
     startedAt: new Date().toISOString(),
     ownerPid: process.pid,
     command: codexPath,
-    argsPreview: redactCodexArgs(args),
+    argsPreview: redactCodexArgs(args, stdinPrompt),
     reviewTarget: reviewSelection.label || null
   });
 
@@ -369,13 +374,17 @@ export async function startCodexJob(ctx, input) {
 
   let proc;
   try {
-    proc = spawn(codexPath, args, {
+    const env = buildCodexChildEnv(ctx.env);
+    const invocation = buildCommandInvocation(codexPath, args, { env });
+    proc = spawn(invocation.command, invocation.args, {
       cwd: job.cwd,
       // Scrub inherited environment before launching Codex.
-      env: buildCodexChildEnv(ctx.env),
+      env,
       detached: true,
-      stdio: ["ignore", "pipe", "pipe"]
+      stdio: ["pipe", "pipe", "pipe"],
+      ...invocation.options
     });
+    proc.stdin.end(stdinPrompt ?? "");
   } catch (error) {
     await ctx.jobStore.update(job.id, {
       status: "failed",
@@ -544,6 +553,13 @@ function killProcessGroup(proc, signal) {
 
 function killPid(pid, signal) {
   if (!pid) return false;
+  if (process.platform === "win32") {
+    const result = spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], {
+      windowsHide: true,
+      stdio: "ignore"
+    });
+    return !result.error && result.status === 0;
+  }
   try {
     process.kill(-pid, signal);
     return true;

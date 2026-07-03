@@ -1,12 +1,22 @@
 # Changelog
 
+## 0.1.7 - 2026-07-03
+
+- Replaced the Unix shell MCP launch path with direct host `node` execution.
+- Added platform-aware config, log, PATH, Codex binary discovery, Windows command-shim wrapping, and Windows process cancellation helpers.
+- Removed the clone installer's macOS-only guard.
+- Reframed platform support as macOS tested, with Linux/Windows implemented for direct host paths and pending real Cowork validation.
+- Renamed the challenge-review command to `/adversarial-review` to match the OpenAI Codex Claude Code plugin surface.
+- Kept `/transfer` out of 0.1.x after review because it requires the Codex app-server external-agent import path and Cowork transcript discovery.
+- Aligned plugin, marketplace, and package descriptions with the concise upstream style.
+
 ## 0.1.6 - 2026-07-03
 
 - Added a concise unofficial-community-plugin disclaimer for public release.
-- Made the macOS-host-only scope more prominent in public-facing copy.
+- Made the then-current platform scope more prominent in public-facing copy.
 - Removed the remaining public reference to model-specific internal prompting skill names.
 - Aligned plugin and marketplace descriptions with the Fable delegation and Cowork context-conservation use case.
-- Clarified `/review`, `/critical-review`, and `/delegate` command handoff instructions.
+- Clarified `/review`, `/adversarial-review`, and `/delegate` command handoff instructions.
 
 ## 0.1.5 - 2026-07-03
 
@@ -37,11 +47,11 @@
 ## 0.1.1 - 2026-07-03
 
 - Added host-side Cowork Codex MCP bridge with setup, task, review, status, result, and cancel tools.
-- Added Cowork VM path mapping to trusted Mac host folders with ambiguity rejection.
-- Set `workspace-write` as the default implementation profile and kept broad local access explicit per job.
+- Added Cowork VM path mapping to trusted host folders with ambiguity rejection.
+- Set `workspace-write` as the default implementation profile and added `full-local-access` profile mapping to Codex `danger-full-access`.
 - Added private local job logs and prompt-redacted command metadata.
 - Added Codex CLI discovery, login status parsing, child PATH augmentation, and setup diagnostics.
-- Added live selftest coverage for task, resume, standard review, critical review, cancellation, path mapping, config validation, lifecycle races, and profile mapping.
+- Added live selftest coverage for task, resume, standard review, adversarial review, cancellation, path mapping, config validation, lifecycle races, and profile mapping.
 - Added Claude marketplace metadata and public marketplace install instructions.
 - Cancel live active jobs on MCP shutdown or plugin reload; restarted active jobs without a live handle are marked orphaned.
 - Run `codex_setup` probes with the same child environment used by real Codex jobs.

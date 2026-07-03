@@ -2,7 +2,9 @@
 
 ## Marketplace Install
 
-Create the local config:
+Create the local config.
+
+Linux/macOS:
 
 ```bash
 mkdir -p ~/.config/cowork-codex
@@ -16,6 +18,22 @@ cat > ~/.config/cowork-codex/cowork-codex.local.json <<'JSON'
   "maxConcurrentJobs": 8
 }
 JSON
+```
+
+Windows PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force "$env:APPDATA\cowork-codex" | Out-Null
+@'
+{
+  "defaultProfile": "workspace-write",
+  "cwdAllowlist": [
+    "C:\\absolute\\path\\to\\trusted\\workspace"
+  ],
+  "codexBin": null,
+  "maxConcurrentJobs": 8
+}
+'@ | Set-Content "$env:APPDATA\cowork-codex\cowork-codex.local.json"
 ```
 
 Add this repo as a marketplace and install the plugin:
@@ -49,7 +67,7 @@ If no `--allowlist` is supplied and no config exists yet, the installer uses the
 
 The installer:
 
-1. Creates or updates `~/.config/cowork-codex/cowork-codex.local.json`.
+1. Creates or updates the per-platform local config file.
 2. Writes the supplied `--allowlist` path into `cwdAllowlist`.
 3. Runs `claude plugin validate --strict`.
 4. Adds this checkout as a Claude plugin marketplace.
@@ -69,7 +87,7 @@ npm run install:cowork -- \
   --max-concurrent-jobs 8
 ```
 
-To change it later from Cowork, run `/concurrency <1-8>`. You can also edit `maxConcurrentJobs` in `~/.config/cowork-codex/cowork-codex.local.json`.
+To change it later from Cowork, run `/concurrency <1-8>`. You can also edit `maxConcurrentJobs` in the local config file.
 
 ## Multiple Workspaces
 
@@ -91,6 +109,14 @@ npm run install:cowork -- \
   --codex-bin "$(command -v codex)"
 ```
 
+Windows PowerShell:
+
+```powershell
+npm run install:cowork -- `
+  --allowlist C:\absolute\path\to\trusted\workspace `
+  --codex-bin (where.exe codex | Select-Object -First 1)
+```
+
 ## Preview Without Changes
 
 ```bash
@@ -107,6 +133,8 @@ npm run install:cowork -- --allowlist "$PWD" --skip-plugin-install
 
 ## Manual Install
 
+Linux/macOS:
+
 ```bash
 mkdir -p ~/.config/cowork-codex
 cp .local/cowork-codex.local.json.example ~/.config/cowork-codex/cowork-codex.local.json
@@ -115,7 +143,17 @@ claude plugin marketplace add "$PWD"
 claude plugin install cowork-codex@cowork-codex --scope user
 ```
 
-Edit `~/.config/cowork-codex/cowork-codex.local.json` before use and replace `<trusted-host-workspace>` with a real Mac host path.
+Windows PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force "$env:APPDATA\cowork-codex" | Out-Null
+Copy-Item .local\cowork-codex.local.json.example "$env:APPDATA\cowork-codex\cowork-codex.local.json"
+claude plugin validate --strict (Get-Location).Path
+claude plugin marketplace add (Get-Location).Path
+claude plugin install cowork-codex@cowork-codex --scope user
+```
+
+Edit the local config file before use and replace `<trusted-host-workspace>` with a real host path.
 
 ## Switching Back From a Local Clone to GitHub
 
@@ -128,7 +166,7 @@ claude plugin marketplace add 5pence5/cowork-codex
 claude plugin install cowork-codex@cowork-codex --scope user
 ```
 
-The config file under `~/.config/cowork-codex/cowork-codex.local.json` is not plugin data and is preserved by those commands.
+The local config file is not plugin data and is preserved by those commands.
 
 ## Migrating From A Pre-Release Install
 

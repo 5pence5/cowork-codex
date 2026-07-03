@@ -10,11 +10,11 @@ Use the bridge MCP tools when Fable needs Codex as a research worker, implementa
 Rules:
 
 - Preserve returned bridge job ids and Codex thread ids.
-- Prefer Mac host paths for `cwd`; if Cowork has a `/sessions/<user>/mnt/...` path, pass it through and let the bridge map it.
+- Prefer host paths for `cwd`; if Cowork has a `/sessions/<user>/mnt/...` path, pass it through and let the bridge map it.
 - Never run write-capable Codex jobs while Cowork is mid-edit on the same workspace.
 - Read-only review jobs are safe to run concurrently.
-- Use the default `workspace-write` profile unless the work is inspection-only or the user explicitly requests another profile.
-- Use `full-local-access` only when the user deliberately asks for it.
+- Use the configured default profile unless the work is inspection-only.
+- Pass an explicitly supplied `--profile` through to the MCP tool.
 - Use `codex-prompting` before `codex_delegate` when the user request is broad, multi-step, write-capable, research-heavy, or likely to need verification.
 - Use separate Codex jobs for parallel lanes.
 - Manage delegated jobs with `/status`, `/result`, and `/cancel` when using slash commands.
