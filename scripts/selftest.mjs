@@ -829,7 +829,7 @@ setInterval(() => {}, 1000);
   await expect("tools/list", async () => {
     const response = await send("tools/list");
     toolNames = response.result?.tools?.map((tool) => tool.name).sort() || [];
-    const expected = ["codex_cancel_job", "codex_job_result", "codex_job_status", "codex_set_max_concurrent_jobs", "codex_setup", "codex_start_review", "codex_start_task"].sort();
+    const expected = ["codex_cancel_job", "codex_delegate", "codex_job_result", "codex_job_status", "codex_set_max_concurrent_jobs", "codex_setup", "codex_start_review", "codex_start_task"].sort();
     for (const name of expected) {
       if (!toolNames.includes(name)) throw new Error(`missing ${name}`);
     }
@@ -943,8 +943,8 @@ setInterval(() => {}, 1000);
   });
 
   let cancelJobId = null;
-  await expect("codex_start_task cancel target", async () => {
-    const response = await callTool("codex_start_task", {
+  await expect("codex_delegate cancel target", async () => {
+    const response = await callTool("codex_delegate", {
       prompt: "Before replying, run a harmless sleep command for 30 seconds, then reply CANCEL_TARGET.",
       cwd: tempWorkspace,
       profile: "read-only"

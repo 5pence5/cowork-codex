@@ -44,13 +44,13 @@ Cowork Codex 0.1.x mirrors the OpenAI Codex Claude Code plugin at the workflow l
 | OpenAI Codex Claude Code plugin surface | Cowork Codex 0.1.x surface |
 | --- | --- |
 | Setup readiness check | `codex_setup`, `/setup` |
-| Research or implementation delegation | `codex_start_task`, `/delegate` |
+| Research or implementation delegation | `codex_delegate`, `/delegate` |
 | Review | `codex_start_review`, `/review` |
 | Adversarial review | `/critical-review` as the MCP-native challenge-review path |
 | Status | `codex_job_status`, `/status` |
 | Result retrieval | `codex_job_result`, `/result` |
 | Cancellation | `codex_cancel_job`, `/cancel` |
-| Resume latest or explicit thread | `resume` on `codex_start_task`, routed by `/delegate` |
+| Resume latest or explicit thread | `resume` on `codex_delegate`, routed by `/delegate` |
 | Transfer current Claude Code session into Codex | Not included in 0.1.x |
 | Review gate hooks | Not included in 0.1.x |
 | Internal skills and Claude Code rescue agent | Replaced by Cowork-specific `cowork-codex` and `codex-prompting` skills plus MCP tool schemas |

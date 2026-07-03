@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4 - 2026-07-03
+
+- Added `codex_delegate` as the preferred MCP tool for Fable research and implementation delegation.
+- Kept `codex_start_task` as a compatibility alias for older workflows.
+- Clarified that the Claude plugin install bundles the MCP server, slash commands, and skills together.
+
 ## 0.1.3 - 2026-07-03
 
 - Added a Cowork-native `codex-prompting` skill for compact, block-structured Codex task handoffs through `/delegate` and `codex_start_task`.

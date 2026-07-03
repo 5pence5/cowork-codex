@@ -10,6 +10,7 @@ Use this checklist after installing or updating the plugin in Claude Cowork.
 4. Confirm these tools are visible:
    - `codex_setup`
    - `codex_set_max_concurrent_jobs`
+   - `codex_delegate`
    - `codex_start_task`
    - `codex_start_review`
    - `codex_job_status`

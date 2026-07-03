@@ -8,7 +8,7 @@ import { cancelActiveJobs, cancelJob, createRunnerContext, REVIEW_ENGINE, startC
 
 const SERVER_INFO = {
   name: "cowork-codex",
-  version: "0.1.3"
+  version: "0.1.4"
 };
 const PROTOCOL_VERSION = "2025-06-18";
 
@@ -53,8 +53,26 @@ const TOOLS = [
     }
   },
   {
+    name: "codex_delegate",
+    description: "Delegate a research or implementation job to host Codex using codex exec --json. Returns a job id; manage it with codex_job_status, codex_job_result, and codex_cancel_job.",
+    inputSchema: {
+      type: "object",
+      required: ["prompt", "cwd"],
+      properties: {
+        prompt: { type: "string", minLength: 1 },
+        cwd: { type: "string", minLength: 1 },
+        profile: { type: "string", enum: PROFILE_VALUES, description: "Permission profile. full-local-access is never a default; use it only when the user explicitly asks for that job." },
+        model: { type: "string", description: "Optional Codex model id. Must match ^[A-Za-z0-9._:-]+$." },
+        effort: { type: "string", enum: EFFORT_VALUES },
+        resume: { type: "string", description: "Use 'latest' for the latest completed thread in this workspace, or pass an explicit thread id matching ^[A-Za-z0-9-]+$." },
+        ...commonWait
+      },
+      additionalProperties: false
+    }
+  },
+  {
     name: "codex_start_task",
-    description: "Start a Codex task using codex exec --json.",
+    description: "Compatibility alias for codex_delegate. Start a Codex task using codex exec --json.",
     inputSchema: {
       type: "object",
       required: ["prompt", "cwd"],
@@ -281,6 +299,7 @@ async function callTool(name, args) {
         localConfigSource: setup.localConfig.source
       };
     }
+    case "codex_delegate":
     case "codex_start_task": {
       const ctx = await runnerContext();
       const job = await startCodexJob(ctx, {
@@ -293,7 +312,16 @@ async function callTool(name, args) {
         resume: args.resume
       });
       const waited = await waitForJob(jobStore, job.id, args.wait_seconds);
-      return { job: statusBody(waited || job), handle: { id: job.id }, reviewEngine: null };
+      return {
+        job: statusBody(waited || job),
+        handle: { id: job.id },
+        reviewEngine: null,
+        management: {
+          statusTool: "codex_job_status",
+          resultTool: "codex_job_result",
+          cancelTool: "codex_cancel_job"
+        }
+      };
     }
     case "codex_start_review": {
       const mode = args.mode || "standard";

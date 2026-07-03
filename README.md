@@ -25,7 +25,7 @@ Future versions can move beyond compatibility with richer job grouping, named su
 ## Features
 
 - Host-side Codex discovery, version, login, config, and active-job diagnostics through `codex_setup`.
-- Background or foreground Codex research and implementation jobs through `codex_start_task` and `/delegate`.
+- Background or foreground Codex research and implementation jobs through `codex_delegate` and `/delegate`.
 - Standard and critical read-only review jobs through `codex_start_review`.
 - Delegated job management through `/status`, `/result`, and `/cancel`, backed by `codex_job_status`, `codex_job_result`, and `codex_cancel_job`.
 - Multiple active Codex jobs, bounded by `maxConcurrentJobs` (`8` by default, clamped from `1` to `8`).
@@ -84,6 +84,12 @@ The SSH form requires repo access, a loaded SSH key, and GitHub in `known_hosts`
 
 Run `/reload-plugins`, then verify the `cowork-codex` MCP server and tools are visible with `/mcp`.
 
+The Claude plugin install is the distribution unit. It installs the bundled MCP server, slash commands, and skills together:
+
+- MCP tools: `codex_setup`, `codex_delegate`, `codex_job_status`, `codex_job_result`, `codex_cancel_job`, and related review/config tools.
+- Slash commands: `/delegate`, `/status`, `/result`, `/cancel`, `/review`, `/critical-review`, `/setup`, and `/concurrency`.
+- Skills: `cowork-codex` and `codex-prompting`.
+
 You can install and run `codex_setup` before writing any config; task and review jobs stay disabled until `cwdAllowlist` contains at least one real folder.
 
 See [docs/INSTALL.md](docs/INSTALL.md) for clone-based install, dry-run, multiple-workspace, custom Codex binary, config-only, and manual install options.
@@ -134,6 +140,7 @@ The plugin exposes these MCP tools:
 
 - `codex_setup`
 - `codex_set_max_concurrent_jobs`
+- `codex_delegate`
 - `codex_start_task`
 - `codex_start_review`
 - `codex_job_status`
@@ -142,7 +149,7 @@ The plugin exposes these MCP tools:
 
 The bundled slash commands in `commands/` are thin instructions around those tools.
 
-For `/delegate` and direct `codex_start_task` use, Cowork should shape non-trivial prompts with the bundled `codex-prompting` skill before handing them to host Codex.
+For `/delegate` and direct `codex_delegate` use, Cowork should shape non-trivial prompts with the bundled `codex-prompting` skill before handing them to host Codex. `codex_start_task` remains available as a compatibility alias for older workflows.
 
 Typical flow:
 
