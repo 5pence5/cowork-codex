@@ -21,24 +21,34 @@ Cowork Codex is a macOS Claude Cowork plugin that delegates work to the host Cod
 
 ## Quick Install
 
-Clone the repo:
+Create the local config with at least one trusted Mac host workspace:
 
 ```bash
-git clone git@github.com:5pence5/cowork-codex.git
-cd cowork-codex
+mkdir -p ~/.config/cowork-codex
+cat > ~/.config/cowork-codex/cowork-codex.local.json <<'JSON'
+{
+  "defaultProfile": "workspace-write",
+  "cwdAllowlist": [
+    "/absolute/path/to/trusted/workspace"
+  ],
+  "codexBin": null,
+  "maxConcurrentJobs": 2
+}
+JSON
 ```
 
-Run the installer with at least one trusted Mac host workspace:
+Add this repo as a Claude plugin marketplace and install the plugin:
 
 ```bash
-npm run install:cowork -- --allowlist /absolute/path/to/trusted/workspace
+claude plugin marketplace add git@github.com:5pence5/cowork-codex.git
+claude plugin install cowork-codex@cowork-codex --scope user
 ```
 
-The installer creates or updates `~/.config/cowork-codex/cowork-codex.local.json`, validates the plugin, adds this checkout as a local Claude plugin marketplace, and installs `cowork-codex@cowork-codex-local` for the current user.
+While the repo is private, the marketplace add command requires GitHub access to `5pence5/cowork-codex`.
 
 Reload plugins, then verify the `cowork-codex` MCP server and six tools are visible with `/mcp`.
 
-See [docs/INSTALL.md](docs/INSTALL.md) for dry-run, multiple-workspace, custom Codex binary, config-only, and manual install options.
+See [docs/INSTALL.md](docs/INSTALL.md) for clone-based install, dry-run, multiple-workspace, custom Codex binary, config-only, and manual install options.
 
 ## Configuration
 

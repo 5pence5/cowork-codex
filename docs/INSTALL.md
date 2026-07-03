@@ -1,6 +1,35 @@
 # Install
 
-## One-command Local Install
+## Marketplace Install
+
+Create the local config:
+
+```bash
+mkdir -p ~/.config/cowork-codex
+cat > ~/.config/cowork-codex/cowork-codex.local.json <<'JSON'
+{
+  "defaultProfile": "workspace-write",
+  "cwdAllowlist": [
+    "/absolute/path/to/trusted/workspace"
+  ],
+  "codexBin": null,
+  "maxConcurrentJobs": 2
+}
+JSON
+```
+
+Add this repo as a marketplace and install the plugin:
+
+```bash
+claude plugin marketplace add git@github.com:5pence5/cowork-codex.git
+claude plugin install cowork-codex@cowork-codex --scope user
+```
+
+While this repo is private, the marketplace add command requires GitHub access to `5pence5/cowork-codex`.
+
+Then reload plugins in Cowork, run `/mcp`, and call `codex_setup`.
+
+## Clone-Based Install
 
 From a clone of this repository:
 
@@ -8,15 +37,13 @@ From a clone of this repository:
 npm run install:cowork -- --allowlist /absolute/path/to/trusted/workspace
 ```
 
-While this repo is private, cloning requires GitHub access to `5pence5/cowork-codex`.
-
 The installer:
 
 1. Creates or updates `~/.config/cowork-codex/cowork-codex.local.json`.
 2. Writes the supplied `--allowlist` path into `cwdAllowlist`.
 3. Runs `claude plugin validate`.
-4. Adds this checkout as a local Claude plugin marketplace.
-5. Installs `cowork-codex@cowork-codex-local` for the current user.
+4. Adds this checkout as a Claude plugin marketplace.
+5. Installs `cowork-codex@cowork-codex` for the current user.
 
 Then reload plugins in Cowork, run `/mcp`, and call `codex_setup`.
 
@@ -61,7 +88,20 @@ mkdir -p ~/.config/cowork-codex
 cp .local/cowork-codex.local.json.example ~/.config/cowork-codex/cowork-codex.local.json
 claude plugin validate "$PWD"
 claude plugin marketplace add "$PWD"
-claude plugin install cowork-codex@cowork-codex-local --scope user
+claude plugin install cowork-codex@cowork-codex --scope user
 ```
 
 Edit `~/.config/cowork-codex/cowork-codex.local.json` before use and replace `<trusted-host-workspace>` with a real Mac host path.
+
+## Replacing the Earlier Local Development Install
+
+Early local test installs used a parent-folder marketplace named `cowork-codex-local`. To move that install to the repo marketplace identity:
+
+```bash
+claude plugin uninstall cowork-codex@cowork-codex-local --scope user --keep-data
+claude plugin marketplace remove cowork-codex-local
+claude plugin marketplace add git@github.com:5pence5/cowork-codex.git
+claude plugin install cowork-codex@cowork-codex --scope user
+```
+
+The config file under `~/.config/cowork-codex/cowork-codex.local.json` is not plugin data and is preserved by those commands.

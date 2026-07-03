@@ -135,7 +135,7 @@ async function main() {
 
   if (!options.skipPluginInstall) {
     await run("claude", ["plugin", "marketplace", "add", root], options);
-    await run("claude", ["plugin", "install", "cowork-codex@cowork-codex-local", "--scope", "user"], options);
+    await run("claude", ["plugin", "install", "cowork-codex@cowork-codex", "--scope", "user"], options);
   }
 
   console.log("");
@@ -152,4 +152,3 @@ try {
   console.error(usage());
   process.exitCode = 1;
 }
-
