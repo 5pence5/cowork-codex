@@ -25,7 +25,7 @@ It is designed for the Cowork host/VM split: Codex runs on the host where it is 
 
 ## Requirements
 
-- Node.js 18.18 or newer.
+- Node.js 18.20 or newer.
 - Authenticated Codex CLI on the host machine.
 - Claude plugin environment that resolves `${CLAUDE_PLUGIN_ROOT}` in `.mcp.json`.
 

@@ -21,7 +21,7 @@ The MCP server is launched by `.mcp.json` through:
 node ${CLAUDE_PLUGIN_ROOT}/servers/cowork-codex-mcp.mjs
 ```
 
-The plugin launches the bundled stdio MCP server with host `node`. Node.js 18.18 or newer must be visible to the Claude plugin environment.
+The plugin launches the bundled stdio MCP server with host `node`. Node.js 18.20 or newer must be visible to the Claude plugin environment.
 
 ## Config
 
