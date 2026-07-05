@@ -21,3 +21,4 @@ Rules:
 - Use `codex_job_status` with bounded `wait_seconds` rather than tight polling loops.
 - Use `codex_job_result` for final output and return Codex output verbatim unless the user asks for a summary.
 - Use `/allowlist` or `codex_cwd_allowlist` when the user wants to inspect, add, remove, or replace configured workspace folders.
+- Use `/logs` or `codex_job_logs` when a job fails or the user needs stdout, stderr, or event-log details.

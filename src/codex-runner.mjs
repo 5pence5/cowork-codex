@@ -30,7 +30,7 @@ function sleep(ms) {
 
 export function classifyError(message = "") {
   const text = String(message).toLowerCase();
-  if (/\b(rate|quota|usage|limit|too many requests|429)\b/.test(text)) return "usage-limit";
+  if (/\brate[- ]?limit(?:ed)?\b|\busage[- ]?limit\b|\bquota\b|\btoo many requests\b|\b429\b/.test(text)) return "usage-limit";
   if (/\b(auth|login|credential|unauthori[sz]ed|forbidden|401|403)\b|api[\s_-]*key/.test(text)) return "auth";
   return "other";
 }
@@ -87,6 +87,8 @@ async function ensureGitRepository(cwd) {
 }
 
 async function detectDefaultBranch(cwd) {
+  const originHead = await git(cwd, ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]);
+  if (originHead.ok && originHead.stdout) return originHead.stdout;
   for (const name of ["main", "master", "trunk"]) {
     if (await gitRefExists(cwd, `refs/heads/${name}`)) return name;
     if (await gitRefExists(cwd, `refs/remotes/origin/${name}`)) return `origin/${name}`;
@@ -261,6 +263,9 @@ export async function prepareJob(ctx, input) {
   const localConfig = await readLocalConfig(localConfigPath(ctx.env));
   const cwdInfo = await mapAndValidateCwd(input.cwd, localConfig);
   const profile = input.forceReadOnly ? "read-only" : (input.profile || localConfig.defaultProfile || "workspace-write");
+  if (!localConfig.allowedProfiles?.includes(profile)) {
+    throw new Error(`Profile "${profile}" is not enabled in local config.`);
+  }
   const sandbox = input.forceReadOnly ? "read-only" : profileToSandbox(profile);
   const codexResolution = await resolveCodexBinary(ctx.env, localConfig);
   if (!codexResolution.path) {
@@ -338,13 +343,17 @@ export async function startCodexJob(ctx, input) {
   const track = (promise) => {
     const tracked = Promise.resolve(promise)
       .catch(async (error) => {
-        const current = ctx.jobStore.get(job.id) || job;
-        if (!ctx.jobStore.isTerminal(current)) {
-          await ctx.jobStore.update(job.id, {
-            phase: "log-write-error",
-            errorKind: "other",
-            errorMessage: error.message
-          });
+        try {
+          const current = ctx.jobStore.get(job.id) || job;
+          if (!ctx.jobStore.isTerminal(current)) {
+            await ctx.jobStore.update(job.id, {
+              phase: "log-write-error",
+              errorKind: "other",
+              errorMessage: error.message
+            });
+          }
+        } catch (updateError) {
+          console.error("[cowork-codex] failed to record job IO error", updateError);
         }
       })
       .finally(() => pendingIo.delete(tracked));
@@ -448,39 +457,34 @@ export async function startCodexJob(ctx, input) {
     })());
   });
 
-  proc.on("close", async (code, signal) => {
-    await Promise.allSettled([...pendingIo]);
-    const current = ctx.jobStore.get(job.id) || job;
-    ctx.jobStore.detachProcess(job.id);
-    if (current.status === "cancelled") {
-      await ctx.jobStore.update(job.id, { exitCode: code, signal, endedAt: current.endedAt || new Date().toISOString() });
-      return;
-    }
-    if (current.status === "completed" && code !== 0) {
-      const msg = `Codex emitted turn.completed but process exited with code ${code}${signal ? ` signal ${signal}` : ""}.`;
-      await ctx.jobStore.update(job.id, {
-        status: "failed",
-        phase: "process.exited",
-        endedAt: new Date().toISOString(),
-        exitCode: code,
-        signal,
-        errorKind: classifyError(msg),
-        errorMessage: msg
-      });
-    } else if (current.status !== "completed" && current.status !== "failed") {
-      const msg = code === 0 ? "Codex process exited without turn.completed." : `Codex process exited with code ${code}${signal ? ` signal ${signal}` : ""}.`;
-      await ctx.jobStore.update(job.id, {
-        status: "failed",
-        phase: "process.exited",
-        endedAt: new Date().toISOString(),
-        exitCode: code,
-        signal,
-        errorKind: classifyError(msg),
-        errorMessage: msg
-      });
-    } else {
-      await ctx.jobStore.update(job.id, { exitCode: code, signal });
-    }
+  proc.on("close", () => {
+    track((async () => {
+      await Promise.allSettled([...pendingIo]);
+      const current = ctx.jobStore.get(job.id) || job;
+      ctx.jobStore.detachProcess(job.id);
+      if (current.status === "cancelled") {
+        await ctx.jobStore.update(job.id, { exitCode: code, signal, endedAt: current.endedAt || new Date().toISOString() });
+        return;
+      }
+      if (current.status === "completed" && code !== 0) {
+        await ctx.jobStore.update(job.id, { exitCode: code, signal });
+        return;
+      }
+      if (current.status !== "completed" && current.status !== "failed") {
+        const msg = code === 0 ? "Codex process exited without turn.completed." : `Codex process exited with code ${code}${signal ? ` signal ${signal}` : ""}.`;
+        await ctx.jobStore.update(job.id, {
+          status: "failed",
+          phase: "process.exited",
+          endedAt: new Date().toISOString(),
+          exitCode: code,
+          signal,
+          errorKind: classifyError(msg),
+          errorMessage: msg
+        });
+      } else {
+        await ctx.jobStore.update(job.id, { exitCode: code, signal });
+      }
+    })());
   });
 
   const currentAfterSpawn = ctx.jobStore.get(job.id) || job;

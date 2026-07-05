@@ -37,6 +37,8 @@ The bridge returns a config error for task and review jobs when the config is mi
 
 `cwdAllowlist` can be changed through the `codex_cwd_allowlist` MCP tool or `/allowlist` command. The tool preserves the rest of the local config, canonicalizes added and set paths with `realpath`, and can remove stale absolute entries.
 
+`allowedProfiles` can narrow caller-selectable Codex profiles. When omitted, all supported profiles remain available. `allowlistEdits` can disable Cowork-side allowlist changes while still allowing `/allowlist` to report current folders.
+
 `maxConcurrentJobs` defaults to 8 and is clamped from 1 to 8. Cowork can change this host-local value through the `codex_set_max_concurrent_jobs` MCP tool or `/concurrency` command.
 
 ## Compatibility Scope
@@ -52,6 +54,7 @@ Cowork Codex 0.1.x mirrors the OpenAI Codex Claude Code plugin at the workflow l
 | Adversarial review | `/adversarial-review` |
 | Status | `codex_job_status`, `/status` |
 | Result retrieval | `codex_job_result`, `/result` |
+| Log tails | `codex_job_logs`, `/logs` |
 | Cancellation | `codex_cancel_job`, `/cancel` |
 | Resume latest or explicit thread | `resume` on `codex_delegate`, routed by `/delegate` |
 | Transfer current Claude Code session into Codex | Not included in 0.1.x |
@@ -72,6 +75,8 @@ Ambiguous VM paths return an error with the matching candidate folders.
 
 `src/job-store.mjs` stores append-only JSONL job records plus stdout, stderr, and event logs. On normal MCP shutdown, the server cancels live active jobs through their process handles before exit. Restarted active jobs loaded without a live handle are marked orphaned without signalling stale stored PIDs.
 
+Terminal job status is one-way: once a job is completed, failed, cancelled, or rejected, later process output can only attach exit metadata. This keeps late buffered output from changing a cancelled job into a completed job.
+
 Each active task or review is a separate Codex CLI child process with its own job id, logs, and result. The bridge does not merge or coordinate simultaneous file edits across jobs.
 
 ## Profiles
@@ -84,4 +89,4 @@ Review jobs use read-only behavior.
 
 ## Child Environment
 
-`src/child-env.mjs` passes a limited environment to Codex, preserving basic shell/user/locale values, platform path variables, and `CODEX_HOME`. It augments `PATH` with platform-specific npm and tool locations so Codex jobs can find tools when launched from a minimal plugin environment. `codex_setup` probes Codex with the same child environment used by real jobs.
+`src/child-env.mjs` passes a limited environment to Codex, preserving basic shell/user/locale values, platform path variables, `CODEX_HOME`, and standard proxy/CA variables. It augments `PATH` with platform-specific npm and tool locations so Codex jobs can find tools when launched from a minimal plugin environment. `codex_setup` probes Codex with the same child environment used by real jobs.

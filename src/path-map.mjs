@@ -42,8 +42,11 @@ export async function mapAndValidateCwd(inputCwd, localConfig) {
 
   const configPath = localConfig?.path || "COWORK_CODEX_LOCAL_CONFIG";
   const allowlistRoots = await normalizeAllowlist(localConfig?.cwdAllowlist || []);
-  if (!localConfig?.exists || allowlistRoots.length === 0) {
+  if (!localConfig?.exists || !Array.isArray(localConfig?.cwdAllowlist) || localConfig.cwdAllowlist.length === 0) {
     throw new Error(`No cwd allowlist is configured. Copy .local/cowork-codex.local.json.example to ${configPath}, set cwdAllowlist to host folders, and retry.`);
+  }
+  if (allowlistRoots.length === 0) {
+    throw new Error(`No configured cwdAllowlist entries currently resolve to existing host folders. Update ${configPath} with an existing host folder and retry.`);
   }
 
   const candidates = [];

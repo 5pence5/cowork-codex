@@ -1,10 +1,14 @@
-import { appendFile, chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, chmod, mkdir, open, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { defaultLogsPath } from "./platform.mjs";
 
 const RUNNING_STATES = new Set(["queued", "running"]);
 const TERMINAL_STATES = new Set(["completed", "failed", "cancelled", "rejected"]);
+const TERMINAL_MUTABLE_FIELDS = new Set(["exitCode", "signal", "endedAt", "pid", "ownerPid"]);
+const LOG_STREAMS = new Set(["out", "err", "events"]);
+const DEFAULT_TAIL_BYTES = 64 * 1024;
+const MAX_TAIL_BYTES = 256 * 1024;
 
 function nowIso() {
   return new Date().toISOString();
@@ -145,9 +149,19 @@ export class JobStore {
   async update(id, patch) {
     const existing = this.jobs.get(id);
     if (!existing) throw new Error(`Unknown job id: ${id}`);
-    const next = { ...existing, ...patch, updatedAt: nowIso() };
+    let effectivePatch = patch;
+    if (this.isTerminal(existing)) {
+      effectivePatch = {};
+      for (const [key, value] of Object.entries(patch)) {
+        if (TERMINAL_MUTABLE_FIELDS.has(key)) effectivePatch[key] = value;
+      }
+      if (Object.keys(effectivePatch).length === 0) {
+        return existing;
+      }
+    }
+    const next = { ...existing, ...effectivePatch, updatedAt: nowIso() };
     this.jobs.set(id, next);
-    await appendJsonl(this.jobsPath, { type: "job.updated", at: nowIso(), id, patch: { ...patch, updatedAt: next.updatedAt } });
+    await appendJsonl(this.jobsPath, { type: "job.updated", at: nowIso(), id, patch: { ...effectivePatch, updatedAt: next.updatedAt } });
     return next;
   }
 
@@ -208,6 +222,38 @@ export class JobStore {
     await chmod(job.logs.err, 0o600);
   }
 
+  async readLogTail(id, stream = "err", tailBytes = DEFAULT_TAIL_BYTES) {
+    const job = this.get(id);
+    if (!job) throw new Error(`Unknown job id: ${id}`);
+    if (!LOG_STREAMS.has(stream)) {
+      throw new Error("stream must be one of out, err, events.");
+    }
+    const requested = Number(tailBytes || DEFAULT_TAIL_BYTES);
+    const limit = Math.max(1, Math.min(Number.isFinite(requested) ? Math.trunc(requested) : DEFAULT_TAIL_BYTES, MAX_TAIL_BYTES));
+    const path = job.logs?.[stream];
+    if (!path) throw new Error(`No ${stream} log path is recorded for ${id}.`);
+    const handle = await open(path, "r");
+    try {
+      const { size } = await handle.stat();
+      const bytesToRead = Math.min(size, limit);
+      const start = Math.max(0, size - bytesToRead);
+      const buffer = Buffer.alloc(bytesToRead);
+      await handle.read(buffer, 0, bytesToRead, start);
+      return {
+        id,
+        stream,
+        path,
+        tailBytes: limit,
+        size,
+        bytesRead: bytesToRead,
+        truncated: start > 0,
+        text: buffer.toString("utf8")
+      };
+    } finally {
+      await handle.close();
+    }
+  }
+
   summarize(job) {
     return {
       id: job.id,
@@ -238,6 +284,6 @@ export class JobStore {
   }
 }
 
-export function defaultLogsDir(rootDir) {
+export function defaultLogsDir() {
   return defaultLogsPath();
 }

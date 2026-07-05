@@ -28,5 +28,5 @@ claude plugin validate --strict "$PWD"
 
 - Keep plugin behavior and docs in sync.
 - Update `CHANGELOG.md` for user-facing changes.
-- Bump `package.json`, `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, and `SERVER_INFO.version` together when command/tool behavior changes.
+- Bump `package.json`, `.claude-plugin/plugin.json`, and `.claude-plugin/marketplace.json` together when command/tool behavior changes. `npm run check` verifies version sync, and the MCP server reads `package.json` at startup.
 - Do not commit machine-local config files or job logs.
