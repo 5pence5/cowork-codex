@@ -457,7 +457,7 @@ export async function startCodexJob(ctx, input) {
     })());
   });
 
-  proc.on("close", () => {
+  proc.on("close", (code, signal) => {
     track((async () => {
       await Promise.allSettled([...pendingIo]);
       const current = ctx.jobStore.get(job.id) || job;

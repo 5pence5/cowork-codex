@@ -203,6 +203,20 @@ try {
     return selected;
   });
 
+  await expect("allowedProfiles invalid config fails closed", async () => {
+    const badProfileConfig = join(tempRoot, "bad-profile-config.json");
+    await writeFile(badProfileConfig, JSON.stringify({
+      cwdAllowlist: [tempWorkspace],
+      allowedProfiles: ["nope"]
+    }), "utf8");
+    const config = await readLocalConfig(badProfileConfig);
+    if (config.allowedProfiles.length !== 0) throw new Error(`allowedProfiles was ${config.allowedProfiles}`);
+    if (!config.warnings.some((warning) => warning.includes("No supported allowedProfiles"))) {
+      throw new Error(`missing fail-closed warning: ${config.warnings.join(" | ")}`);
+    }
+    return config.warnings.join(" | ");
+  });
+
   await expect("codex setup treats Not logged in as unauthenticated", async () => {
     const fakeCodex = join(tempRoot, "fake-codex-login-status.mjs");
     await writeFile(fakeCodex, `#!/usr/bin/env node
@@ -872,6 +886,39 @@ console.log(JSON.stringify({ type: "turn.completed", usage: { total_tokens: 1 } 
     return message;
   });
 
+  await expect("allowedProfiles invalid list rejects default profile", async () => {
+    const fakeCodex = join(tempRoot, "fake-codex-profile-invalid.mjs");
+    const fakeConfig = join(tempRoot, "fake-profile-invalid-config.json");
+    await writeFile(fakeCodex, `#!/usr/bin/env node
+console.log(JSON.stringify({ type: "turn.completed", usage: { total_tokens: 1 } }));
+`, "utf8");
+    await chmod(fakeCodex, 0o755);
+    await writeFile(fakeConfig, JSON.stringify({
+      defaultProfile: "workspace-write",
+      cwdAllowlist: [tempWorkspace],
+      allowedProfiles: ["workspace_write"],
+      codexBin: fakeCodex,
+      maxConcurrentJobs: 2
+    }), "utf8");
+    const store = new JobStore(tempRoot, { logsDir: join(tempRoot, "profile-invalid-logs") });
+    await store.init();
+    let message = "";
+    try {
+      await startCodexJob({
+        jobStore: store,
+        env: { ...process.env, CODEX_BIN: fakeCodex, COWORK_CODEX_LOCAL_CONFIG: fakeConfig }
+      }, {
+        type: "task",
+        prompt: "PROFILE_INVALID_PROMPT",
+        cwd: tempWorkspace
+      });
+    } catch (error) {
+      message = error.message;
+    }
+    if (!message.includes("not enabled in local config")) throw new Error(`unexpected profile rejection: ${message}`);
+    return message;
+  });
+
   await expect("concurrency cap rejects extra active job", async () => {
     const fakeCodex = join(tempRoot, "fake-codex-slow.mjs");
     const fakeConfig = join(tempRoot, "fake-concurrency-config.json");
@@ -1015,6 +1062,40 @@ setInterval(() => {}, 1000);
     const failed = await waitForJob(store, job.id, 10);
     if (failed.status !== "failed") throw new Error(`spawn error job ended ${failed.status}`);
     if (!["process.spawn-error", "process.exited"].includes(failed.phase)) throw new Error(`unexpected phase ${failed.phase}`);
+    return `${failed.phase}: ${failed.errorMessage || ""}`.slice(0, 160);
+  });
+
+  await expect("early non-json child exit marks job failed", async () => {
+    const fakeCodex = join(tempRoot, "fake-codex-early-exit.mjs");
+    const fakeConfig = join(tempRoot, "fake-early-exit-config.json");
+    await writeFile(fakeCodex, `#!/usr/bin/env node
+console.error("boom");
+process.exit(1);
+`, "utf8");
+    await chmod(fakeCodex, 0o755);
+    await writeFile(fakeConfig, JSON.stringify({
+      defaultProfile: "workspace-write",
+      cwdAllowlist: [tempWorkspace],
+      codexBin: fakeCodex,
+      maxConcurrentJobs: 2
+    }), "utf8");
+    const store = new JobStore(tempRoot, { logsDir: join(tempRoot, "early-exit-logs") });
+    await store.init();
+    const job = await startCodexJob({
+      jobStore: store,
+      env: { ...process.env, CODEX_BIN: fakeCodex, COWORK_CODEX_LOCAL_CONFIG: fakeConfig }
+    }, {
+      type: "task",
+      prompt: "EARLY_EXIT_SHOULD_FAIL",
+      cwd: tempWorkspace,
+      profile: "read-only"
+    });
+    const failed = await waitForJob(store, job.id, 10);
+    if (failed.status !== "failed") throw new Error(`early exit job ended ${failed.status}`);
+    if (failed.phase !== "process.exited") throw new Error(`unexpected phase ${failed.phase}`);
+    if (failed.exitCode !== 1) throw new Error(`exitCode was ${failed.exitCode}`);
+    if (store.activeCount() !== 0) throw new Error(`job remained active: ${store.activeCount()}`);
+    if (failed.errorMessage === "code is not defined") throw new Error("close handler lost exit arguments");
     return `${failed.phase}: ${failed.errorMessage || ""}`.slice(0, 160);
   });
 

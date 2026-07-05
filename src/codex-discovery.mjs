@@ -161,8 +161,8 @@ function normalizeDefaultProfile(value, warnings) {
 function normalizeAllowedProfiles(value, warnings = []) {
   if (value === undefined || value === null) return [...PROFILE_VALUES];
   if (!Array.isArray(value)) {
-    warnings.push("Ignoring allowedProfiles because it is not an array.");
-    return [...PROFILE_VALUES];
+    warnings.push("Ignoring allowedProfiles because it is not an array; no task profiles are enabled.");
+    return [];
   }
   const next = [];
   for (const entry of value) {
@@ -172,7 +172,10 @@ function normalizeAllowedProfiles(value, warnings = []) {
       warnings.push(`Ignoring unsupported allowedProfiles entry "${String(entry)}".`);
     }
   }
-  return next.length ? next : [...PROFILE_VALUES];
+  if (next.length === 0) {
+    warnings.push("No supported allowedProfiles entries were configured; no task profiles are enabled.");
+  }
+  return next;
 }
 
 function normalizeAllowlistEdits(value, warnings = []) {
