@@ -188,7 +188,7 @@ try {
     if (config.maxConcurrentJobs !== 8) throw new Error(`maxConcurrentJobs was ${config.maxConcurrentJobs}`);
     if (config.cwdAllowlist.length !== 0) throw new Error("non-array cwdAllowlist should be ignored");
     if (config.allowedProfiles.length !== 1 || config.allowedProfiles[0] !== "read-only") throw new Error(`allowedProfiles was ${config.allowedProfiles}`);
-    if (config.allowlistEdits !== true) throw new Error(`allowlistEdits was ${config.allowlistEdits}`);
+    if (config.allowlistEdits !== false) throw new Error(`allowlistEdits was ${config.allowlistEdits}`);
     if (config.codexBin !== null) throw new Error("non-string codexBin should be ignored");
     if (!config.warnings?.length) throw new Error("expected config warnings");
     return config.warnings.join(" | ");
@@ -1229,6 +1229,21 @@ process.exit(1);
       const message = response.result?.structuredContent?.error?.message || "";
       if (!response.result?.isError || !message.includes("edits are disabled")) {
         throw new Error(`expected allowlistEdits rejection, got ${JSON.stringify(response)}`);
+      }
+      return message;
+    } finally {
+      await writeFile(tempConfig, `${JSON.stringify(configBefore, null, 2)}\n`, "utf8");
+    }
+  });
+
+  await expect("codex_cwd_allowlist fails closed for invalid allowlistEdits", async () => {
+    const configBefore = JSON.parse(await readFile(tempConfig, "utf8"));
+    await writeFile(tempConfig, `${JSON.stringify({ ...configBefore, allowlistEdits: "false" }, null, 2)}\n`, "utf8");
+    try {
+      const response = await callTool("codex_cwd_allowlist", { action: "add", path: extraWorkspace }, 30000);
+      const message = response.result?.structuredContent?.error?.message || "";
+      if (!response.result?.isError || !message.includes("edits are disabled")) {
+        throw new Error(`expected invalid allowlistEdits rejection, got ${JSON.stringify(response)}`);
       }
       return message;
     } finally {

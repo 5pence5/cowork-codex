@@ -181,8 +181,8 @@ function normalizeAllowedProfiles(value, warnings = []) {
 function normalizeAllowlistEdits(value, warnings = []) {
   if (value === undefined || value === null) return true;
   if (typeof value === "boolean") return value;
-  warnings.push("Ignoring allowlistEdits because it is not a boolean.");
-  return true;
+  warnings.push("Ignoring allowlistEdits because it is not a boolean; Cowork-side allowlist edits are disabled.");
+  return false;
 }
 
 export function normalizeMaxConcurrentJobs(value, warnings = []) {
