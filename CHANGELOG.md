@@ -10,7 +10,6 @@
 - Made the MCP server read its version from `package.json` and added a version-sync check for plugin manifests.
 - Improved default-branch detection through `origin/HEAD`, stale-allowlist errors, and Codex version drift warnings.
 - Expanded CI syntax/version checks across Linux, macOS, Windows, Node 18, and Node 22.
-- Added a lightweight README demo GIF.
 - Deferred job timeouts, retention/compaction, MCP SDK migration, progress notifications, and output schemas.
 
 ## 0.1.10 - 2026-07-05

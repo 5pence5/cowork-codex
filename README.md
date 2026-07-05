@@ -4,8 +4,6 @@ Cowork Codex gives Fable in Claude Cowork a Codex research and implementation su
 
 Use it to delegate research and implementation work to Codex while keeping the main Cowork thread lighter and conserving context and tokens.
 
-![Cowork Codex demo](docs/assets/cowork-codex-demo.gif)
-
 Cowork Codex is an unofficial community plugin and is not affiliated with OpenAI or Anthropic.
 
 Current 0.1.x releases are tested on macOS hosts. Linux and Windows support is implemented for direct host paths and standard Node/Codex installs, but still needs real Cowork-session validation.
