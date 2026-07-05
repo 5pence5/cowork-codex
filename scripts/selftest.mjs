@@ -578,6 +578,21 @@ process.exit(1);
     return selection.base;
   });
 
+  await expect("review selection ignores stale origin HEAD", async () => {
+    const reviewRepo = join(tempRoot, "stale-origin-head-review-repo");
+    await mkdir(reviewRepo, { recursive: true });
+    await execFileAsync("git", ["init", "-b", "main"], { cwd: reviewRepo, timeout: 10000 });
+    await execFileAsync("git", ["config", "user.name", "Cowork Codex Selftest"], { cwd: reviewRepo, timeout: 10000 });
+    await execFileAsync("git", ["config", "user.email", "cowork-codex-selftest@example.invalid"], { cwd: reviewRepo, timeout: 10000 });
+    await writeFile(join(reviewRepo, "file.txt"), "one\n", "utf8");
+    await execFileAsync("git", ["add", "file.txt"], { cwd: reviewRepo, timeout: 10000 });
+    await execFileAsync("git", ["commit", "-m", "initial"], { cwd: reviewRepo, timeout: 10000 });
+    await execFileAsync("git", ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/missing"], { cwd: reviewRepo, timeout: 10000 });
+    const selection = await resolveReviewSelection(reviewRepo, { scope: "branch" });
+    if (selection.base !== "main") throw new Error(`base was ${selection.base}`);
+    return selection.base;
+  });
+
   await expect("stale cwd allowlist gets specific error", async () => {
     const staleRoot = join(tempRoot, "stale-allowlist-root");
     let message = "";
@@ -708,6 +723,32 @@ process.exit(1);
     return `${final.status}/${final.phase}`;
   });
 
+  await expect("completed job nonzero process exit becomes failed", async () => {
+    const store = new JobStore(tempRoot, { logsDir: join(tempRoot, "completed-nonzero-logs") });
+    await store.init();
+    const job = await store.create({
+      type: "task",
+      cwd: tempWorkspace,
+      originalCwd: tempWorkspace,
+      profile: "read-only",
+      sandbox: "read-only",
+      prompt: "NONZERO_EXIT_AFTER_COMPLETED"
+    });
+    await store.update(job.id, { status: "completed", phase: "turn.completed", finalMessage: "done", endedAt: new Date().toISOString() });
+    await store.update(job.id, {
+      status: "failed",
+      phase: "process.exited",
+      exitCode: 2,
+      signal: null,
+      errorKind: "other",
+      errorMessage: "Codex process exited with code 2."
+    });
+    const final = store.get(job.id);
+    if (final.status !== "failed" || final.phase !== "process.exited") throw new Error(`${final.status}/${final.phase}`);
+    if (final.finalMessage !== "done") throw new Error("final message was lost");
+    return `${final.status}/${final.phase}/${final.exitCode}`;
+  });
+
   await expect("job store returns bounded log tails", async () => {
     const store = new JobStore(tempRoot, { logsDir: join(tempRoot, "tail-logs") });
     await store.init();
@@ -815,6 +856,39 @@ console.log(JSON.stringify({ type: "turn.completed", usage: { total_tokens: 1 } 
     if (jobsLog.includes("\"args\"")) throw new Error("raw args were persisted");
     if (!jobsLog.includes("argsPreview")) throw new Error("argsPreview was not persisted");
     return `${completed.id} ${completed.threadId}`;
+  });
+
+  await expect("fake Codex completed event with nonzero exit fails job", async () => {
+    const fakeCodex = join(tempRoot, "fake-codex-complete-nonzero.mjs");
+    const fakeConfig = join(tempRoot, "fake-complete-nonzero-config.json");
+    await writeFile(fakeCodex, `#!/usr/bin/env node
+console.log(JSON.stringify({ type: "thread.started", thread_id: "fake-thread-nonzero" }));
+console.log(JSON.stringify({ type: "turn.completed", usage: { total_tokens: 1 } }));
+process.exit(2);
+`, "utf8");
+    await chmod(fakeCodex, 0o755);
+    await writeFile(fakeConfig, JSON.stringify({
+      defaultProfile: "workspace-write",
+      cwdAllowlist: [tempWorkspace],
+      codexBin: fakeCodex,
+      maxConcurrentJobs: 2
+    }), "utf8");
+    const store = new JobStore(tempRoot, { logsDir: join(tempRoot, "fake-complete-nonzero-logs") });
+    await store.init();
+    const job = await startCodexJob({
+      jobStore: store,
+      env: { ...process.env, CODEX_BIN: fakeCodex, COWORK_CODEX_LOCAL_CONFIG: fakeConfig }
+    }, {
+      type: "task",
+      prompt: "COMPLETE_THEN_NONZERO",
+      cwd: tempWorkspace,
+      profile: "read-only"
+    });
+    const failed = await waitForJob(store, job.id, 10);
+    if (failed.status !== "failed") throw new Error(`fake nonzero job ended ${failed.status}`);
+    if (failed.phase !== "process.exited") throw new Error(`unexpected phase ${failed.phase}`);
+    if (failed.exitCode !== 2) throw new Error(`exitCode was ${failed.exitCode}`);
+    return `${failed.status}/${failed.phase}/${failed.exitCode}`;
   });
 
   await expect("full-local-access profile maps to danger-full-access argv", async () => {

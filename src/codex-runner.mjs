@@ -35,6 +35,15 @@ export function classifyError(message = "") {
   return "other";
 }
 
+function processExitMessage(code, signal, missingTerminal = false) {
+  if (missingTerminal && code === 0 && !signal) return "Codex process exited without turn.completed.";
+  if (code === 0 && signal) return `Codex process exited with signal ${signal}.`;
+  if (code === null || code === undefined) {
+    return signal ? `Codex process exited with signal ${signal}.` : "Codex process exited without an exit code.";
+  }
+  return `Codex process exited with code ${code}${signal ? ` signal ${signal}` : ""}.`;
+}
+
 function profileToSandbox(profile) {
   const sandbox = SANDBOX_BY_PROFILE[profile];
   if (!sandbox) {
@@ -88,7 +97,10 @@ async function ensureGitRepository(cwd) {
 
 async function detectDefaultBranch(cwd) {
   const originHead = await git(cwd, ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]);
-  if (originHead.ok && originHead.stdout) return originHead.stdout;
+  if (originHead.ok && originHead.stdout) {
+    const fullOriginHeadRef = originHead.stdout.startsWith("refs/") ? originHead.stdout : `refs/remotes/${originHead.stdout}`;
+    if (await gitRefExists(cwd, fullOriginHeadRef)) return originHead.stdout;
+  }
   for (const name of ["main", "master", "trunk"]) {
     if (await gitRefExists(cwd, `refs/heads/${name}`)) return name;
     if (await gitRefExists(cwd, `refs/remotes/origin/${name}`)) return `origin/${name}`;
@@ -466,12 +478,21 @@ export async function startCodexJob(ctx, input) {
         await ctx.jobStore.update(job.id, { exitCode: code, signal, endedAt: current.endedAt || new Date().toISOString() });
         return;
       }
-      if (current.status === "completed" && code !== 0) {
-        await ctx.jobStore.update(job.id, { exitCode: code, signal });
+      if (current.status === "completed" && (code !== 0 || signal)) {
+        const msg = processExitMessage(code, signal);
+        await ctx.jobStore.update(job.id, {
+          status: "failed",
+          phase: "process.exited",
+          endedAt: new Date().toISOString(),
+          exitCode: code,
+          signal,
+          errorKind: classifyError(msg),
+          errorMessage: msg
+        });
         return;
       }
       if (current.status !== "completed" && current.status !== "failed") {
-        const msg = code === 0 ? "Codex process exited without turn.completed." : `Codex process exited with code ${code}${signal ? ` signal ${signal}` : ""}.`;
+        const msg = processExitMessage(code, signal, true);
         await ctx.jobStore.update(job.id, {
           status: "failed",
           phase: "process.exited",

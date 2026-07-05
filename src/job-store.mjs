@@ -6,6 +6,7 @@ import { defaultLogsPath } from "./platform.mjs";
 const RUNNING_STATES = new Set(["queued", "running"]);
 const TERMINAL_STATES = new Set(["completed", "failed", "cancelled", "rejected"]);
 const TERMINAL_MUTABLE_FIELDS = new Set(["exitCode", "signal", "endedAt", "pid", "ownerPid"]);
+const COMPLETED_EXIT_FAILURE_FIELDS = new Set(["status", "phase", "exitCode", "signal", "endedAt", "pid", "ownerPid", "errorKind", "errorMessage"]);
 const LOG_STREAMS = new Set(["out", "err", "events"]);
 const DEFAULT_TAIL_BYTES = 64 * 1024;
 const MAX_TAIL_BYTES = 256 * 1024;
@@ -23,6 +24,13 @@ function elapsedMs(job) {
 function makeJobId() {
   const rand = Math.random().toString(36).slice(2, 8);
   return `job-${Date.now().toString(36)}-${rand}`;
+}
+
+function isCompletedExitFailure(existing, patch) {
+  return existing.status === "completed" &&
+    patch.status === "failed" &&
+    patch.phase === "process.exited" &&
+    ((typeof patch.exitCode === "number" && patch.exitCode !== 0) || Boolean(patch.signal));
 }
 
 async function ensurePrivateDir(path) {
@@ -152,8 +160,9 @@ export class JobStore {
     let effectivePatch = patch;
     if (this.isTerminal(existing)) {
       effectivePatch = {};
+      const mutableFields = isCompletedExitFailure(existing, patch) ? COMPLETED_EXIT_FAILURE_FIELDS : TERMINAL_MUTABLE_FIELDS;
       for (const [key, value] of Object.entries(patch)) {
-        if (TERMINAL_MUTABLE_FIELDS.has(key)) effectivePatch[key] = value;
+        if (mutableFields.has(key)) effectivePatch[key] = value;
       }
       if (Object.keys(effectivePatch).length === 0) {
         return existing;
