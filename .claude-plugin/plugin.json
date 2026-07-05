@@ -1,6 +1,6 @@
 {
   "name": "cowork-codex",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Use host Codex from Claude Cowork to review code or delegate tasks.",
   "license": "Apache-2.0",
   "author": {

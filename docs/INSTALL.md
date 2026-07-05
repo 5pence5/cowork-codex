@@ -55,6 +55,8 @@ Then run `/reload-plugins` in Cowork, run `/mcp`, and call `codex_setup`.
 
 You can install and run `codex_setup` before writing local config. Task and review jobs stay disabled until `cwdAllowlist` contains at least one real folder.
 
+After the plugin is loaded, you can change `cwdAllowlist` from Cowork with `/allowlist`.
+
 ## Clone-Based Install
 
 From a clone of this repository:
@@ -97,6 +99,13 @@ Repeat `--allowlist`:
 npm run install:cowork -- \
   --allowlist /Users/me/Projects/app-one \
   --allowlist /Users/me/Projects/app-two
+```
+
+To add or remove folders later from Cowork:
+
+```bash
+/allowlist add /Users/me/Projects/app-three
+/allowlist remove /Users/me/Projects/old-app
 ```
 
 ## Custom Codex Binary

@@ -3,7 +3,7 @@
   "name": "cowork-codex",
   "metadata": {
     "description": "Use host Codex from Claude Cowork to review code or delegate tasks.",
-    "version": "0.1.9"
+    "version": "0.1.10"
   },
   "owner": {
     "name": "5pence5"
@@ -12,7 +12,7 @@
     {
       "name": "cowork-codex",
       "description": "Use host Codex from Claude Cowork to review code or delegate tasks.",
-      "version": "0.1.9",
+      "version": "0.1.10",
       "author": {
         "name": "5pence5"
       },

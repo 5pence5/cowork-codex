@@ -17,6 +17,7 @@ It is designed for the Cowork host/VM split: Codex runs on the host where it is 
 - `/delegate`, `/status`, `/result`, and `/cancel` to delegate research or implementation work and manage background jobs.
 - `/setup` for host Codex readiness checks.
 - `/concurrency` to change the active Codex job cap, which defaults to 8.
+- `/allowlist` to show or update the workspace folders Codex jobs can use.
 - A `codex-prompting` skill for compact implementation, research, and diagnosis handoffs.
 
 ## Requirements
@@ -115,7 +116,7 @@ Set `COWORK_CODEX_LOCAL_CONFIG` only for direct development runs when you want t
 Fields:
 
 - `defaultProfile`: `read-only` or `workspace-write`. Unsupported values are ignored and the bridge uses `workspace-write`.
-- `cwdAllowlist`: host folders where jobs may run. Placeholder entries beginning with `<` are ignored.
+- `cwdAllowlist`: host folders where jobs may run. Placeholder entries beginning with `<` are ignored. Change it in the JSON config, with `npm run install:cowork -- --allowlist <path>`, or from Cowork with `/allowlist`.
 - `codexBin`: optional absolute Codex binary path. Leave `null` to auto-discover.
 - `maxConcurrentJobs`: active Codex job cap. Defaults to 8 and is clamped from 1 to 8. Change it in the JSON config, with `npm run install:cowork -- --max-concurrent-jobs <n>`, or from Cowork with `/concurrency <n>`.
 
@@ -217,10 +218,24 @@ Examples:
 /concurrency 8
 ```
 
+### `/allowlist`
+
+Shows or changes the configured host workspace folders.
+
+Examples:
+
+```bash
+/allowlist
+/allowlist add /Users/me/Projects/app
+/allowlist remove /Users/me/Old/app
+/allowlist set /Users/me/Projects/app-one /Users/me/Projects/app-two
+```
+
 The plugin also exposes these MCP tools:
 
 - `codex_setup`
 - `codex_set_max_concurrent_jobs`
+- `codex_cwd_allowlist`
 - `codex_delegate`
 - `codex_start_task`
 - `codex_start_review`
@@ -291,6 +306,16 @@ Use this when a Codex run found the right direction but needs one more pass.
 
 Use `/concurrency` to view or change how many Codex jobs Cowork Codex can run at once. The same value can also be set in `cowork-codex.local.json`.
 
+### Add A Workspace
+
+```bash
+/allowlist
+/allowlist add /Users/me/Projects/app
+/allowlist remove /Users/me/Old/app
+```
+
+Use `/allowlist` to view or change `cwdAllowlist` from Cowork. It reports the config path, configured folders, and active existing roots.
+
 ## Codex Integration
 
 Cowork Codex uses the global `codex` binary installed on the host and the Codex auth state already available there.
@@ -304,7 +329,7 @@ The 0.1.x line is compatibility-first. It follows the OpenAI Codex Claude Code p
 Current differences:
 
 - `/delegate` is the Cowork equivalent of the OpenAI plugin's task handoff flow.
-- `/concurrency` is Cowork-specific.
+- `/allowlist` and `/concurrency` are Cowork-specific.
 - `/transfer`, review-gate hooks, and Claude Code internal agent surfaces are not included in this release.
 - Linux and Windows support is implemented for direct host paths and standard Node/Codex installs, but still needs real Cowork-session validation.
 
@@ -357,7 +382,7 @@ Remove-Item -Recurse -Force "$env:LOCALAPPDATA\cowork-codex\logs"
 
 - If `codex_setup` cannot find Codex, set `codexBin` in the local config to the absolute host path from `command -v codex` on Linux/macOS or `where.exe codex` on Windows.
 - If the MCP server does not start, confirm Claude resolves `${CLAUDE_PLUGIN_ROOT}` and that Node is available on `PATH`.
-- If a Cowork `/sessions/.../mnt/...` cwd is rejected, add the exact host workspace path to `cwdAllowlist`.
+- If a Cowork `/sessions/.../mnt/...` cwd is rejected, add the exact host workspace path with `/allowlist add <host-path>`.
 - If child tools such as `npm` are missing during Codex jobs, inspect `codex_setup.childProcess.path`.
 
 ## Release Packaging

@@ -35,6 +35,8 @@ Development runs may override this with `COWORK_CODEX_LOCAL_CONFIG`.
 
 The bridge returns a config error for task and review jobs when the config is missing or the allowlist is empty.
 
+`cwdAllowlist` can be changed through the `codex_cwd_allowlist` MCP tool or `/allowlist` command. The tool preserves the rest of the local config, canonicalizes added and set paths with `realpath`, and can remove stale absolute entries.
+
 `maxConcurrentJobs` defaults to 8 and is clamped from 1 to 8. Cowork can change this host-local value through the `codex_set_max_concurrent_jobs` MCP tool or `/concurrency` command.
 
 ## Compatibility Scope
@@ -45,6 +47,7 @@ Cowork Codex 0.1.x mirrors the OpenAI Codex Claude Code plugin at the workflow l
 | --- | --- |
 | Setup readiness check | `codex_setup`, `/setup` |
 | Research or implementation delegation | `codex_delegate`, `/delegate` |
+| Workspace-folder config | `codex_cwd_allowlist`, `/allowlist` |
 | Review | `codex_start_review`, `/review` |
 | Adversarial review | `/adversarial-review` |
 | Status | `codex_job_status`, `/status` |

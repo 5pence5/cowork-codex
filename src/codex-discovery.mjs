@@ -1,7 +1,7 @@
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { buildCodexChildEnv, buildCodexChildPath } from "./child-env.mjs";
@@ -162,10 +162,8 @@ export function normalizeMaxConcurrentJobs(value, warnings = []) {
   return clamped;
 }
 
-export async function setLocalMaxConcurrentJobs(configPath, value) {
+async function readEditableLocalConfig(configPath) {
   if (!configPath) throw new Error("No local config path is configured.");
-  const warnings = [];
-  const maxConcurrentJobs = normalizeMaxConcurrentJobs(value, warnings);
   let parsed = {
     defaultProfile: "workspace-write",
     cwdAllowlist: [],
@@ -188,14 +186,187 @@ export async function setLocalMaxConcurrentJobs(configPath, value) {
     }
   }
 
-  parsed.maxConcurrentJobs = maxConcurrentJobs;
+  return { parsed, created };
+}
+
+async function writeEditableLocalConfig(configPath, parsed) {
   await mkdir(dirname(configPath), { recursive: true });
   await writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
+}
+
+export async function setLocalMaxConcurrentJobs(configPath, value) {
+  const warnings = [];
+  const maxConcurrentJobs = normalizeMaxConcurrentJobs(value, warnings);
+  const { parsed, created } = await readEditableLocalConfig(configPath);
+
+  parsed.maxConcurrentJobs = maxConcurrentJobs;
+  await writeEditableLocalConfig(configPath, parsed);
 
   return {
     path: configPath,
     created,
     maxConcurrentJobs,
+    warnings
+  };
+}
+
+function isPlaceholderAllowlistEntry(value) {
+  return String(value || "").trim().startsWith("<");
+}
+
+async function validateAllowlistPath(value) {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error("paths entries must be non-empty strings.");
+  }
+  if (isPlaceholderAllowlistEntry(value)) {
+    throw new Error(`paths entries must be real host folders, got placeholder: ${value}`);
+  }
+  if (!isHostAbsolutePath(value)) {
+    throw new Error(`cwdAllowlist paths must be absolute host paths: ${value}`);
+  }
+  const resolved = resolve(value);
+  const info = await stat(resolved).catch((error) => {
+    throw new Error(`cwdAllowlist path does not exist: ${value}${error?.message ? ` (${error.message})` : ""}`);
+  });
+  if (!info.isDirectory()) {
+    throw new Error(`cwdAllowlist path is not a directory: ${value}`);
+  }
+  return realpath(resolved);
+}
+
+async function keyForAllowlistEntry(value) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const resolved = isHostAbsolutePath(value) ? resolve(value) : value;
+  return realpath(resolved).catch(() => resolved);
+}
+
+async function dedupeAllowlist(entries) {
+  const seen = new Set();
+  const next = [];
+  for (const entry of entries) {
+    if (typeof entry !== "string" || !entry.trim()) continue;
+    const key = await keyForAllowlistEntry(entry);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    next.push(entry);
+  }
+  return next;
+}
+
+function validateAllowlistRemovePath(value) {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error("paths entries must be non-empty strings.");
+  }
+  if (isPlaceholderAllowlistEntry(value)) {
+    throw new Error(`paths entries must be real host folders, got placeholder: ${value}`);
+  }
+  if (!isHostAbsolutePath(value)) {
+    throw new Error(`cwdAllowlist paths must be absolute host paths: ${value}`);
+  }
+  return value;
+}
+
+async function activeAllowlistRoots(entries) {
+  const roots = [];
+  for (const entry of entries) {
+    if (typeof entry !== "string" || !entry.trim() || isPlaceholderAllowlistEntry(entry) || !isHostAbsolutePath(entry)) continue;
+    try {
+      const resolved = resolve(entry);
+      const info = await stat(resolved);
+      if (info.isDirectory()) roots.push(await realpath(resolved));
+    } catch {
+      // Stale entries remain visible in cwdAllowlist but are not active roots.
+    }
+  }
+  return dedupeAllowlist(roots);
+}
+
+export async function updateLocalCwdAllowlist(configPath, action = "list", paths = [], options = {}) {
+  if (!["list", "add", "remove", "set"].includes(action)) {
+    throw new Error("action must be one of list, add, remove, set.");
+  }
+  if (!Array.isArray(paths)) {
+    throw new Error("paths must be an array.");
+  }
+
+  const { parsed, created } = await readEditableLocalConfig(configPath);
+  const current = Array.isArray(parsed.cwdAllowlist)
+    ? parsed.cwdAllowlist.filter((entry) => typeof entry === "string" && entry.trim())
+    : [];
+  const previousCwdAllowlist = [...current];
+  const warnings = [];
+  if (parsed.cwdAllowlist !== undefined && !Array.isArray(parsed.cwdAllowlist)) {
+    warnings.push("Replacing ignored cwdAllowlist because it is not an array.");
+  }
+
+  let next = [...current];
+  let added = [];
+  let removed = [];
+
+  if (action === "add") {
+    if (paths.length === 0) throw new Error("paths is required for action add.");
+    const validated = [];
+    for (const path of paths) validated.push(await validateAllowlistPath(path));
+    next = await dedupeAllowlist([
+      ...current.filter((entry) => !isPlaceholderAllowlistEntry(entry)),
+      ...validated
+    ]);
+    const previousKeys = new Set((await Promise.all(current.map((entry) => keyForAllowlistEntry(entry)))).filter(Boolean));
+    added = [];
+    for (const entry of next) {
+      const key = await keyForAllowlistEntry(entry);
+      if (key && !previousKeys.has(key)) added.push(entry);
+    }
+  } else if (action === "remove") {
+    if (paths.length === 0) throw new Error("paths is required for action remove.");
+    const validated = paths.map((entry) => validateAllowlistRemovePath(entry));
+    const removeOriginals = new Set(validated);
+    const removeKeys = new Set((await Promise.all(validated.map((entry) => keyForAllowlistEntry(entry)))).filter(Boolean));
+    next = [];
+    for (const entry of current) {
+      const key = await keyForAllowlistEntry(entry);
+      if (removeOriginals.has(entry) || (key && removeKeys.has(key))) {
+        removed.push(entry);
+      } else {
+        next.push(entry);
+      }
+    }
+  } else if (action === "set") {
+    const validated = [];
+    for (const path of paths) validated.push(await validateAllowlistPath(path));
+    next = await dedupeAllowlist(validated);
+    const nextKeys = new Set((await Promise.all(next.map((entry) => keyForAllowlistEntry(entry)))).filter(Boolean));
+    const previousKeys = new Set((await Promise.all(current.map((entry) => keyForAllowlistEntry(entry)))).filter(Boolean));
+    added = [];
+    removed = [];
+    for (const entry of next) {
+      const key = await keyForAllowlistEntry(entry);
+      if (key && !previousKeys.has(key)) added.push(entry);
+    }
+    for (const entry of current) {
+      const key = await keyForAllowlistEntry(entry);
+      if (key && !nextKeys.has(key)) removed.push(entry);
+    }
+  }
+
+  const changed = JSON.stringify(previousCwdAllowlist) !== JSON.stringify(next);
+  const activeRoots = await activeAllowlistRoots(next);
+  if (action !== "list" && changed && !options.dryRun) {
+    parsed.cwdAllowlist = next;
+    await writeEditableLocalConfig(configPath, parsed);
+  }
+
+  return {
+    path: configPath,
+    action,
+    dryRun: Boolean(options.dryRun),
+    created,
+    changed,
+    previousCwdAllowlist,
+    cwdAllowlist: next,
+    activeRoots,
+    added,
+    removed,
     warnings
   };
 }

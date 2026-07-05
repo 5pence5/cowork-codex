@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.10 - 2026-07-05
+
+- Added `codex_cwd_allowlist` and `/allowlist` so Cowork can list, add, remove, or replace configured workspace folders.
+- Added allowlist selftest coverage for active roots, dry-run writes, duplicate adds, stale removals, set/restore, field preservation, and validation.
+- Updated install, architecture, validation, and README docs for Cowork-side workspace-folder management.
+
 ## 0.1.9 - 2026-07-03
 
 - Added bare `/result` support by letting `codex_job_result` return the latest terminal Codex job when no id is supplied.

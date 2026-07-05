@@ -2,13 +2,13 @@
 import readline from "node:readline";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MAX_CONCURRENT_JOBS_LIMIT, collectCodexSetup, localConfigPath, setLocalMaxConcurrentJobs } from "../src/codex-discovery.mjs";
+import { MAX_CONCURRENT_JOBS_LIMIT, collectCodexSetup, localConfigPath, readLocalConfig, setLocalMaxConcurrentJobs, updateLocalCwdAllowlist } from "../src/codex-discovery.mjs";
 import { JobStore } from "../src/job-store.mjs";
 import { cancelActiveJobs, cancelJob, createRunnerContext, REVIEW_ENGINE, startCodexJob, waitForJob } from "../src/codex-runner.mjs";
 
 const SERVER_INFO = {
   name: "cowork-codex",
-  version: "0.1.9"
+  version: "0.1.10"
 };
 const PROTOCOL_VERSION = "2025-06-18";
 
@@ -47,6 +47,31 @@ const TOOLS = [
         maxConcurrentJobs: {
           type: "number",
           description: `Requested active-job cap. Values are clamped from 1 to ${MAX_CONCURRENT_JOBS_LIMIT}.`
+        }
+      },
+      additionalProperties: false
+    }
+  },
+  {
+    name: "codex_cwd_allowlist",
+    description: "List or update host workspace folders in the local cwdAllowlist config.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["list", "add", "remove", "set"] },
+        path: {
+          type: "string",
+          minLength: 1,
+          description: "Host folder path for add, remove, or single-path set."
+        },
+        paths: {
+          type: "array",
+          items: { type: "string", minLength: 1 },
+          description: "Host folder paths for set, or multiple add/remove paths."
+        },
+        dry_run: {
+          type: "boolean",
+          description: "Preview the change without writing local config."
         }
       },
       additionalProperties: false
@@ -247,6 +272,21 @@ function validateToolArguments(tool, args) {
     if (spec.type === "number" && !Number.isFinite(value)) {
       return `${field} must be finite`;
     }
+    if (spec.type === "boolean" && typeof value !== "boolean") {
+      return `${field} must be a boolean`;
+    }
+    if (spec.type === "array") {
+      if (!Array.isArray(value)) return `${field} must be an array`;
+      const itemSpec = spec.items || {};
+      for (const [index, item] of value.entries()) {
+        if (itemSpec.type === "string" && typeof item !== "string") {
+          return `${field}[${index}] must be a string`;
+        }
+        if (itemSpec.type === "string" && itemSpec.minLength && item.length < itemSpec.minLength) {
+          return `${field}[${index}] must be at least ${itemSpec.minLength} character${itemSpec.minLength === 1 ? "" : "s"}`;
+        }
+      }
+    }
     if (spec.enum && !spec.enum.includes(value)) {
       return `${field} must be one of ${spec.enum.join(", ")}`;
     }
@@ -257,6 +297,19 @@ function validateToolArguments(tool, args) {
   }
   if (tool.name === "codex_start_review" && args.base && args.commit) {
     return "Use either base or commit, not both.";
+  }
+  if (tool.name === "codex_cwd_allowlist") {
+    const action = args.action || "list";
+    const hasPath = typeof args.path === "string";
+    const hasPaths = Array.isArray(args.paths);
+    if (hasPath && hasPaths) return "Use either path or paths, not both.";
+    if (action === "list") {
+      if (hasPath || hasPaths) return "list does not accept path or paths.";
+    } else if (!hasPath && !hasPaths) {
+      return action === "set" ? "set requires paths; use paths: [] to clear the list." : `${action} requires path or paths.`;
+    } else if ((action === "add" || action === "remove") && hasPaths && args.paths.length === 0) {
+      return `${action} requires at least one path.`;
+    }
   }
   if (tool.name === "codex_job_status" && !args.id && "wait_seconds" in args) {
     return "wait_seconds requires id for codex_job_status.";
@@ -296,6 +349,17 @@ async function callTool(name, args) {
         ...update,
         effectiveMaxConcurrentJobs: setup.localConfig.maxConcurrentJobs,
         localConfigSource: setup.localConfig.source
+      };
+    }
+    case "codex_cwd_allowlist": {
+      const paths = Array.isArray(args.paths) ? args.paths : (args.path ? [args.path] : []);
+      const configPath = localConfigPath(process.env);
+      const update = await updateLocalCwdAllowlist(configPath, args.action || "list", paths, { dryRun: args.dry_run });
+      const localConfig = await readLocalConfig(configPath);
+      return {
+        ...update,
+        effectiveCwdAllowlist: localConfig.cwdAllowlist,
+        localConfigSource: localConfig.source
       };
     }
     case "codex_delegate":

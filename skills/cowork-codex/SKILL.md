@@ -20,3 +20,4 @@ Rules:
 - Manage delegated jobs with `/status`, `/result`, and `/cancel` when using slash commands.
 - Use `codex_job_status` with bounded `wait_seconds` rather than tight polling loops.
 - Use `codex_job_result` for final output and return Codex output verbatim unless the user asks for a summary.
+- Use `/allowlist` or `codex_cwd_allowlist` when the user wants to inspect, add, remove, or replace configured workspace folders.

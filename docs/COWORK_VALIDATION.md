@@ -10,6 +10,7 @@ Use this checklist after installing or updating the plugin in Claude Cowork.
 4. Confirm these tools are visible:
    - `codex_setup`
    - `codex_set_max_concurrent_jobs`
+   - `codex_cwd_allowlist`
    - `codex_delegate`
    - `codex_start_task`
    - `codex_start_review`
@@ -35,6 +36,15 @@ Use this checklist after installing or updating the plugin in Claude Cowork.
 2. Confirm the response reports `effectiveMaxConcurrentJobs: 8`.
 3. Run `codex_setup`.
 4. Confirm `localConfig.maxConcurrentJobs` is `8`.
+
+## Workspace Folder Config
+
+1. Run `/allowlist`.
+2. Confirm the response reports the expected config path and workspace folders.
+3. Run `/allowlist add <host-folder>` for a disposable existing folder.
+4. Confirm `/allowlist` reports that folder in `cwdAllowlist` and `activeRoots`.
+5. Run `/allowlist remove <host-folder>`.
+6. Confirm the folder was removed.
 
 ## Path Mapping
 

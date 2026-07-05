@@ -889,7 +889,7 @@ setInterval(() => {}, 1000);
     const response = await send("tools/list");
     const tools = response.result?.tools || [];
     toolNames = tools.map((tool) => tool.name).sort();
-    const expected = ["codex_cancel_job", "codex_delegate", "codex_job_result", "codex_job_status", "codex_set_max_concurrent_jobs", "codex_setup", "codex_start_review", "codex_start_task"].sort();
+    const expected = ["codex_cancel_job", "codex_cwd_allowlist", "codex_delegate", "codex_job_result", "codex_job_status", "codex_set_max_concurrent_jobs", "codex_setup", "codex_start_review", "codex_start_task"].sort();
     for (const name of expected) {
       if (!toolNames.includes(name)) throw new Error(`missing ${name}`);
     }
@@ -928,6 +928,117 @@ setInterval(() => {}, 1000);
     const config = JSON.parse(await readFile(tempConfig, "utf8"));
     if (config.maxConcurrentJobs !== 8) throw new Error(`config file value was ${config.maxConcurrentJobs}`);
     return updated.warnings.join(" | ");
+  });
+
+  await expect("codex_cwd_allowlist lists active roots", async () => {
+    const response = await callTool("codex_cwd_allowlist", {}, 30000);
+    if (response.result?.isError) throw new Error(JSON.stringify(response.result.structuredContent));
+    const result = data(response);
+    const tempWorkspaceReal = await realpath(tempWorkspace);
+    if (result.path !== tempConfig) throw new Error(`config path was ${result.path}`);
+    if (!result.cwdAllowlist.includes(tempWorkspace)) throw new Error(`missing configured workspace: ${JSON.stringify(result.cwdAllowlist)}`);
+    if (!result.activeRoots.includes(tempWorkspaceReal)) throw new Error(`missing active root ${tempWorkspaceReal}: ${JSON.stringify(result.activeRoots)}`);
+    return result.activeRoots.join(", ");
+  });
+
+  const extraWorkspace = join(tempRoot, "extra-workspace");
+  await mkdir(extraWorkspace, { recursive: true });
+  const extraWorkspaceReal = await realpath(extraWorkspace);
+
+  await expect("codex_cwd_allowlist dry-run add does not write config", async () => {
+    const response = await callTool("codex_cwd_allowlist", { action: "add", path: extraWorkspace, dry_run: true }, 30000);
+    if (response.result?.isError) throw new Error(JSON.stringify(response.result.structuredContent));
+    const result = data(response);
+    const config = JSON.parse(await readFile(tempConfig, "utf8"));
+    if (!result.changed) throw new Error("dry-run add did not report changed");
+    if (!result.added.includes(extraWorkspaceReal)) throw new Error(`dry-run added ${JSON.stringify(result.added)}`);
+    if (config.cwdAllowlist.includes(extraWorkspaceReal)) throw new Error("dry-run wrote extra workspace");
+    return result.added.join(", ");
+  });
+
+  await expect("codex_cwd_allowlist add preserves local config fields", async () => {
+    const configBefore = JSON.parse(await readFile(tempConfig, "utf8"));
+    configBefore.notes = "preserve me";
+    await writeFile(tempConfig, `${JSON.stringify(configBefore, null, 2)}\n`, "utf8");
+    const response = await callTool("codex_cwd_allowlist", { action: "add", path: extraWorkspace }, 30000);
+    if (response.result?.isError) throw new Error(JSON.stringify(response.result.structuredContent));
+    const result = data(response);
+    const config = JSON.parse(await readFile(tempConfig, "utf8"));
+    if (!result.changed) throw new Error("add did not report changed");
+    if (!result.cwdAllowlist.includes(extraWorkspaceReal)) throw new Error(`missing added workspace: ${JSON.stringify(result.cwdAllowlist)}`);
+    if (config.notes !== "preserve me") throw new Error(`notes field was not preserved: ${JSON.stringify(config)}`);
+    if (config.maxConcurrentJobs !== 8) throw new Error(`maxConcurrentJobs changed: ${config.maxConcurrentJobs}`);
+    return result.cwdAllowlist.join(", ");
+  });
+
+  await expect("codex_cwd_allowlist duplicate add is idempotent", async () => {
+    const response = await callTool("codex_cwd_allowlist", { action: "add", path: extraWorkspace }, 30000);
+    if (response.result?.isError) throw new Error(JSON.stringify(response.result.structuredContent));
+    const result = data(response);
+    if (result.changed) throw new Error(`duplicate add changed list: ${JSON.stringify(result)}`);
+    if (result.added.length !== 0) throw new Error(`duplicate add reported additions: ${JSON.stringify(result.added)}`);
+    return "unchanged";
+  });
+
+  await expect("codex_cwd_allowlist removes stale absolute entries", async () => {
+    const stalePath = join(tempRoot, "missing-workspace");
+    const configBefore = JSON.parse(await readFile(tempConfig, "utf8"));
+    configBefore.cwdAllowlist = [...configBefore.cwdAllowlist, stalePath];
+    await writeFile(tempConfig, `${JSON.stringify(configBefore, null, 2)}\n`, "utf8");
+    const response = await callTool("codex_cwd_allowlist", { action: "remove", path: stalePath }, 30000);
+    if (response.result?.isError) throw new Error(JSON.stringify(response.result.structuredContent));
+    const result = data(response);
+    const config = JSON.parse(await readFile(tempConfig, "utf8"));
+    if (!result.removed.includes(stalePath)) throw new Error(`stale path not removed: ${JSON.stringify(result.removed)}`);
+    if (config.cwdAllowlist.includes(stalePath)) throw new Error("stale path remained in config");
+    return result.removed.join(", ");
+  });
+
+  await expect("codex_cwd_allowlist set replaces and can be restored", async () => {
+    const setWorkspace = join(tempRoot, "set-workspace");
+    await mkdir(setWorkspace, { recursive: true });
+    const setWorkspaceReal = await realpath(setWorkspace);
+    const setResponse = await callTool("codex_cwd_allowlist", { action: "set", paths: [setWorkspace] }, 30000);
+    if (setResponse.result?.isError) throw new Error(JSON.stringify(setResponse.result.structuredContent));
+    const setResult = data(setResponse);
+    if (setResult.cwdAllowlist.length !== 1 || setResult.cwdAllowlist[0] !== setWorkspaceReal) {
+      throw new Error(`set produced ${JSON.stringify(setResult.cwdAllowlist)}`);
+    }
+    if (!setResult.removed.length) throw new Error("set did not report removed entries");
+
+    const restoreResponse = await callTool("codex_cwd_allowlist", { action: "set", paths: [tempWorkspace] }, 30000);
+    if (restoreResponse.result?.isError) throw new Error(JSON.stringify(restoreResponse.result.structuredContent));
+    const restoreResult = data(restoreResponse);
+    const tempWorkspaceReal = await realpath(tempWorkspace);
+    if (restoreResult.cwdAllowlist.length !== 1 || restoreResult.cwdAllowlist[0] !== tempWorkspaceReal) {
+      throw new Error(`restore produced ${JSON.stringify(restoreResult.cwdAllowlist)}`);
+    }
+    return `${setResult.cwdAllowlist[0]} -> ${restoreResult.cwdAllowlist[0]}`;
+  });
+
+  await expect("codex_cwd_allowlist rejects relative add path", async () => {
+    const response = await callTool("codex_cwd_allowlist", { action: "add", path: "relative-workspace" }, 30000);
+    const message = response.result?.structuredContent?.error?.message || "";
+    if (!response.result?.isError || !message.includes("absolute host paths")) {
+      throw new Error(`expected relative path tool error, got ${JSON.stringify(response)}`);
+    }
+    return message;
+  });
+
+  await expect("input validation rejects non-array allowlist paths", async () => {
+    const response = await callTool("codex_cwd_allowlist", { action: "set", paths: tempWorkspace }, 30000);
+    if (response.error?.code !== -32602 || !response.error.message.includes("paths must be an array")) {
+      throw new Error(`expected -32602 paths array error, got ${JSON.stringify(response)}`);
+    }
+    return response.error.message;
+  });
+
+  await expect("input validation rejects unknown allowlist action", async () => {
+    const response = await callTool("codex_cwd_allowlist", { action: "replace", paths: [tempWorkspace] }, 30000);
+    if (response.error?.code !== -32602 || !response.error.message.includes("action must be one of")) {
+      throw new Error(`expected -32602 action error, got ${JSON.stringify(response)}`);
+    }
+    return response.error.message;
   });
 
   await expect("input validation rejects unknown field", async () => {
