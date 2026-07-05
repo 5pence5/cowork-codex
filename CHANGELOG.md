@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.11 - 2026-07-05
+
+- Added `codex_job_logs` and `/logs` for bounded stdout, stderr, and event-log tails.
+- Hardened job lifecycle handling so terminal job status cannot be overwritten by late process output.
+- Wrapped process-close IO handling so one job log/update failure does not take down the MCP server.
+- Added atomic local-config writes, optional `allowedProfiles`, optional `allowlistEdits`, and filesystem-root rejection for allowlist additions.
+- Preserved standard proxy and CA environment variables for Codex child processes.
+- Made the MCP server read its version from `package.json` and added a version-sync check for plugin manifests.
+- Improved default-branch detection through `origin/HEAD`, stale-allowlist errors, and Codex version drift warnings.
+- Expanded CI syntax/version checks across Linux, macOS, Windows, Node 18, and Node 22.
+- Deferred job timeouts, retention/compaction, MCP SDK migration, progress notifications, and output schemas.
+
 ## 0.1.10 - 2026-07-05
 
 - Added `codex_cwd_allowlist` and `/allowlist` so Cowork can list, add, remove, or replace configured workspace folders.

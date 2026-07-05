@@ -3,6 +3,12 @@
   "cwdAllowlist": [
     "<host-workspace>"
   ],
+  "allowedProfiles": [
+    "read-only",
+    "workspace-write",
+    "full-local-access"
+  ],
+  "allowlistEdits": true,
   "codexBin": null,
   "maxConcurrentJobs": 8,
   "notes": "Copy this file to the per-platform Cowork Codex config path for installed-plugin machine settings. Placeholder allowlist entries beginning with < are ignored. defaultProfile accepts read-only or workspace-write. The repo .local directory is for direct development when COWORK_CODEX_LOCAL_CONFIG points at it."

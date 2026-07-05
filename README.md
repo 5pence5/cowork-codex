@@ -18,11 +18,12 @@ It is designed for the Cowork host/VM split: Codex runs on the host where it is 
 - `/setup` for host Codex readiness checks.
 - `/concurrency` to change the active Codex job cap, which defaults to 8.
 - `/allowlist` to show or update the workspace folders Codex jobs can use.
+- `/logs` to inspect bounded stdout, stderr, or event-log tails for a job.
 - A `codex-prompting` skill for compact implementation, research, and diagnosis handoffs.
 
 ## Requirements
 
-- Node.js 18.18 or newer.
+- Node.js 18.20 or newer.
 - Authenticated Codex CLI on the host machine.
 - Claude plugin environment that resolves `${CLAUDE_PLUGIN_ROOT}` in `.mcp.json`.
 
@@ -40,6 +41,12 @@ cat > ~/.config/cowork-codex/cowork-codex.local.json <<'JSON'
   "cwdAllowlist": [
     "/absolute/path/to/workspace"
   ],
+  "allowedProfiles": [
+    "read-only",
+    "workspace-write",
+    "full-local-access"
+  ],
+  "allowlistEdits": true,
   "codexBin": null,
   "maxConcurrentJobs": 8
 }
@@ -56,6 +63,12 @@ New-Item -ItemType Directory -Force "$env:APPDATA\cowork-codex" | Out-Null
   "cwdAllowlist": [
     "C:\\absolute\\path\\to\\workspace"
   ],
+  "allowedProfiles": [
+    "read-only",
+    "workspace-write",
+    "full-local-access"
+  ],
+  "allowlistEdits": true,
   "codexBin": null,
   "maxConcurrentJobs": 8
 }
@@ -106,6 +119,12 @@ Example config:
   "cwdAllowlist": [
     "/absolute/path/to/workspace"
   ],
+  "allowedProfiles": [
+    "read-only",
+    "workspace-write",
+    "full-local-access"
+  ],
+  "allowlistEdits": true,
   "codexBin": null,
   "maxConcurrentJobs": 8
 }
@@ -117,6 +136,8 @@ Fields:
 
 - `defaultProfile`: `read-only` or `workspace-write`. Unsupported values are ignored and the bridge uses `workspace-write`.
 - `cwdAllowlist`: host folders where jobs may run. Placeholder entries beginning with `<` are ignored. Change it in the JSON config, with `npm run install:cowork -- --allowlist <path>`, or from Cowork with `/allowlist`.
+- `allowedProfiles`: optional list of Codex profiles callers may use. Defaults to all supported profiles.
+- `allowlistEdits`: optional boolean for Cowork-side `/allowlist` changes. Defaults to `true`.
 - `codexBin`: optional absolute Codex binary path. Leave `null` to auto-discover.
 - `maxConcurrentJobs`: active Codex job cap. Defaults to 8 and is clamped from 1 to 8. Change it in the JSON config, with `npm run install:cowork -- --max-concurrent-jobs <n>`, or from Cowork with `/concurrency <n>`.
 
@@ -193,6 +214,18 @@ Examples:
 /result job-abc123
 ```
 
+### `/logs`
+
+Shows a bounded tail from a job log stream.
+
+Examples:
+
+```bash
+/logs job-abc123
+/logs job-abc123 err
+/logs job-abc123 events --tail-bytes 32768
+```
+
 ### `/cancel`
 
 Cancels an active background Codex job.
@@ -241,6 +274,7 @@ The plugin also exposes these MCP tools:
 - `codex_start_review`
 - `codex_job_status`
 - `codex_job_result`
+- `codex_job_logs`
 - `codex_cancel_job`
 
 ## Typical Flows
@@ -286,6 +320,7 @@ Then check in with:
 ```bash
 /status
 /result
+/logs job-abc123 err
 ```
 
 ### Continue A Codex Run
@@ -363,6 +398,8 @@ Clear local job history:
 rm -rf ~/.local/state/cowork-codex/logs
 ```
 
+Use `/logs <job-id> [out|err|events]` to inspect bounded log tails from Cowork.
+
 Windows PowerShell:
 
 ```powershell
@@ -384,6 +421,7 @@ Remove-Item -Recurse -Force "$env:LOCALAPPDATA\cowork-codex\logs"
 - If the MCP server does not start, confirm Claude resolves `${CLAUDE_PLUGIN_ROOT}` and that Node is available on `PATH`.
 - If a Cowork `/sessions/.../mnt/...` cwd is rejected, add the exact host workspace path with `/allowlist add <host-path>`.
 - If child tools such as `npm` are missing during Codex jobs, inspect `codex_setup.childProcess.path`.
+- If network calls work in your shell but not in Codex jobs, check whether your proxy or CA variables are present in the host plugin environment. Cowork Codex passes standard proxy and CA variables through to Codex jobs.
 
 ## Release Packaging
 

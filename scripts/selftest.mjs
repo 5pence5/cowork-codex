@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { chmod, mkdir, mkdtemp, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { basename, join, parse, resolve } from "node:path";
 import { execFile, spawn } from "node:child_process";
 import readline from "node:readline";
 import { fileURLToPath } from "node:url";
@@ -166,6 +166,10 @@ async function modeOf(path) {
   return (await stat(path)).mode & 0o777;
 }
 
+function parseRootPath(path) {
+  return parse(path).root;
+}
+
 let exitCode = 0;
 
 try {
@@ -174,6 +178,8 @@ try {
     await writeFile(badConfig, JSON.stringify({
       defaultProfile: "full-local-access",
       cwdAllowlist: tempWorkspace,
+      allowedProfiles: ["read-only", "nope", "read-only"],
+      allowlistEdits: "yes",
       codexBin: 123,
       maxConcurrentJobs: "abc"
     }), "utf8");
@@ -181,6 +187,8 @@ try {
     if (config.defaultProfile !== "workspace-write") throw new Error(`defaultProfile was ${config.defaultProfile}`);
     if (config.maxConcurrentJobs !== 8) throw new Error(`maxConcurrentJobs was ${config.maxConcurrentJobs}`);
     if (config.cwdAllowlist.length !== 0) throw new Error("non-array cwdAllowlist should be ignored");
+    if (config.allowedProfiles.length !== 1 || config.allowedProfiles[0] !== "read-only") throw new Error(`allowedProfiles was ${config.allowedProfiles}`);
+    if (config.allowlistEdits !== false) throw new Error(`allowlistEdits was ${config.allowlistEdits}`);
     if (config.codexBin !== null) throw new Error("non-string codexBin should be ignored");
     if (!config.warnings?.length) throw new Error("expected config warnings");
     return config.warnings.join(" | ");
@@ -193,6 +201,20 @@ try {
     const selected = await firstExecutablePathLine(`Welcome back\n${fakeCodex}\n`);
     if (selected !== fakeCodex) throw new Error(`selected ${selected || "<none>"}`);
     return selected;
+  });
+
+  await expect("allowedProfiles invalid config fails closed", async () => {
+    const badProfileConfig = join(tempRoot, "bad-profile-config.json");
+    await writeFile(badProfileConfig, JSON.stringify({
+      cwdAllowlist: [tempWorkspace],
+      allowedProfiles: ["nope"]
+    }), "utf8");
+    const config = await readLocalConfig(badProfileConfig);
+    if (config.allowedProfiles.length !== 0) throw new Error(`allowedProfiles was ${config.allowedProfiles}`);
+    if (!config.warnings.some((warning) => warning.includes("No supported allowedProfiles"))) {
+      throw new Error(`missing fail-closed warning: ${config.warnings.join(" | ")}`);
+    }
+    return config.warnings.join(" | ");
   });
 
   await expect("codex setup treats Not logged in as unauthenticated", async () => {
@@ -260,6 +282,30 @@ process.exit(1);
     return setup.childProcess.envPolicy;
   });
 
+  await expect("codex setup allows patch-version drift", async () => {
+    const fakeCodex = join(tempRoot, "fake-codex-patch-version.mjs");
+    await writeFile(fakeCodex, `#!/usr/bin/env node
+if (process.argv[2] === "--version") {
+  console.log("codex-cli 0.142.999");
+  process.exit(0);
+}
+if (process.argv[2] === "login" && process.argv[3] === "status") {
+  console.log("Logged in using ChatGPT");
+  process.exit(0);
+}
+process.exit(1);
+`, "utf8");
+    await chmod(fakeCodex, 0o755);
+    const setup = await collectCodexSetup({
+      ...process.env,
+      CODEX_BIN: fakeCodex,
+      COWORK_CODEX_LOCAL_CONFIG: tempConfig
+    });
+    const warningText = setup.warnings.join("\n");
+    if (warningText.includes("Treat Codex upgrades")) throw new Error(`patch version warned: ${warningText}`);
+    return setup.codex.version.text;
+  });
+
   await expect("child env drops broad CODEX variables", async () => {
     const codexApiName = ["CODEX", "API", "KEY"].join("_");
     const codexExtraName = ["CODEX", "EXTRA"].join("_");
@@ -286,6 +332,21 @@ process.exit(1);
     }
     if (!env.PATH.includes("/home/user/.npm-global/bin")) throw new Error(`PATH missing npm fallback: ${env.PATH}`);
     return Object.keys(env).sort().join(", ");
+  });
+
+  await expect("child env preserves standard proxy and CA variables", async () => {
+    const env = buildCodexChildEnv({
+      PATH: "/bin",
+      HOME: "/home/user",
+      HTTPS_PROXY: "http://proxy.example:8080",
+      NO_PROXY: "localhost,127.0.0.1",
+      NODE_EXTRA_CA_CERTS: "/etc/ssl/custom.pem",
+      CURL_CA_BUNDLE: "/etc/ssl/curl.pem"
+    });
+    for (const name of ["HTTPS_PROXY", "NO_PROXY", "NODE_EXTRA_CA_CERTS", "CURL_CA_BUNDLE"]) {
+      if (!env[name]) throw new Error(`${name} was not preserved`);
+    }
+    return "proxy/CA vars preserved";
   });
 
   await expect("child PATH augments POSIX launchd-minimal path", async () => {
@@ -337,9 +398,10 @@ process.exit(1);
   await expect("classifyError uses word boundaries", async () => {
     if (classifyError("failed to generate a response") !== "other") throw new Error("generate matched rate");
     if (classifyError("author field missing") !== "other") throw new Error("author matched auth");
+    if (classifyError("maxBuffer limit exceeded") !== "other") throw new Error("generic limit matched usage");
     if (classifyError("rate limit exceeded") !== "usage-limit") throw new Error("rate limit not classified");
     if (classifyError("API key is missing") !== "auth") throw new Error("api key not classified");
-    return "generate/author avoided; rate/api key classified";
+    return "generate/author/generic limit avoided; rate/api key classified";
   });
 
   await expect("default logs dir is outside the plugin root", async () => {
@@ -500,6 +562,51 @@ process.exit(1);
     return message;
   });
 
+  await expect("review selection uses origin HEAD default branch", async () => {
+    const reviewRepo = join(tempRoot, "origin-head-review-repo");
+    await mkdir(reviewRepo, { recursive: true });
+    await execFileAsync("git", ["init", "-b", "develop"], { cwd: reviewRepo, timeout: 10000 });
+    await execFileAsync("git", ["config", "user.name", "Cowork Codex Selftest"], { cwd: reviewRepo, timeout: 10000 });
+    await execFileAsync("git", ["config", "user.email", "cowork-codex-selftest@example.invalid"], { cwd: reviewRepo, timeout: 10000 });
+    await writeFile(join(reviewRepo, "file.txt"), "one\n", "utf8");
+    await execFileAsync("git", ["add", "file.txt"], { cwd: reviewRepo, timeout: 10000 });
+    await execFileAsync("git", ["commit", "-m", "initial"], { cwd: reviewRepo, timeout: 10000 });
+    await execFileAsync("git", ["update-ref", "refs/remotes/origin/develop", "HEAD"], { cwd: reviewRepo, timeout: 10000 });
+    await execFileAsync("git", ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/develop"], { cwd: reviewRepo, timeout: 10000 });
+    const selection = await resolveReviewSelection(reviewRepo, { scope: "branch" });
+    if (selection.base !== "origin/develop") throw new Error(`base was ${selection.base}`);
+    return selection.base;
+  });
+
+  await expect("review selection ignores stale origin HEAD", async () => {
+    const reviewRepo = join(tempRoot, "stale-origin-head-review-repo");
+    await mkdir(reviewRepo, { recursive: true });
+    await execFileAsync("git", ["init", "-b", "main"], { cwd: reviewRepo, timeout: 10000 });
+    await execFileAsync("git", ["config", "user.name", "Cowork Codex Selftest"], { cwd: reviewRepo, timeout: 10000 });
+    await execFileAsync("git", ["config", "user.email", "cowork-codex-selftest@example.invalid"], { cwd: reviewRepo, timeout: 10000 });
+    await writeFile(join(reviewRepo, "file.txt"), "one\n", "utf8");
+    await execFileAsync("git", ["add", "file.txt"], { cwd: reviewRepo, timeout: 10000 });
+    await execFileAsync("git", ["commit", "-m", "initial"], { cwd: reviewRepo, timeout: 10000 });
+    await execFileAsync("git", ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/missing"], { cwd: reviewRepo, timeout: 10000 });
+    const selection = await resolveReviewSelection(reviewRepo, { scope: "branch" });
+    if (selection.base !== "main") throw new Error(`base was ${selection.base}`);
+    return selection.base;
+  });
+
+  await expect("stale cwd allowlist gets specific error", async () => {
+    const staleRoot = join(tempRoot, "stale-allowlist-root");
+    let message = "";
+    try {
+      await mapAndValidateCwd(tempWorkspace, { exists: true, path: tempConfig, cwdAllowlist: [staleRoot] });
+    } catch (error) {
+      message = error.message;
+    }
+    if (!message.includes("currently resolve to existing host folders")) {
+      throw new Error(`unexpected stale allowlist message: ${message}`);
+    }
+    return message;
+  });
+
   await expect("review pre-spawn failure leaves no active job", async () => {
     const fakeCodex = join(tempRoot, "fake-codex-noop.sh");
     const fakeConfig = join(tempRoot, "fake-review-config.json");
@@ -595,6 +702,71 @@ process.exit(1);
     }
   });
 
+  await expect("terminal job updates cannot flip status", async () => {
+    const store = new JobStore(tempRoot, { logsDir: join(tempRoot, "terminal-guard-logs") });
+    await store.init();
+    const job = await store.create({
+      type: "task",
+      cwd: tempWorkspace,
+      originalCwd: tempWorkspace,
+      profile: "read-only",
+      sandbox: "read-only",
+      prompt: "TERMINAL_GUARD_PROMPT"
+    });
+    await store.update(job.id, { status: "cancelled", phase: "cancelled", endedAt: "2026-07-05T00:00:00.000Z" });
+    await store.update(job.id, { status: "completed", phase: "completed", finalMessage: "SHOULD_NOT_APPEAR" });
+    await store.update(job.id, { exitCode: 0, signal: null });
+    const final = store.get(job.id);
+    if (final.status !== "cancelled" || final.phase !== "cancelled") throw new Error(`terminal status flipped: ${final.status}/${final.phase}`);
+    if (final.finalMessage === "SHOULD_NOT_APPEAR") throw new Error("terminal update accepted finalMessage");
+    if (final.exitCode !== 0) throw new Error("terminal exit metadata was not recorded");
+    return `${final.status}/${final.phase}`;
+  });
+
+  await expect("completed job nonzero process exit becomes failed", async () => {
+    const store = new JobStore(tempRoot, { logsDir: join(tempRoot, "completed-nonzero-logs") });
+    await store.init();
+    const job = await store.create({
+      type: "task",
+      cwd: tempWorkspace,
+      originalCwd: tempWorkspace,
+      profile: "read-only",
+      sandbox: "read-only",
+      prompt: "NONZERO_EXIT_AFTER_COMPLETED"
+    });
+    await store.update(job.id, { status: "completed", phase: "turn.completed", finalMessage: "done", endedAt: new Date().toISOString() });
+    await store.update(job.id, {
+      status: "failed",
+      phase: "process.exited",
+      exitCode: 2,
+      signal: null,
+      errorKind: "other",
+      errorMessage: "Codex process exited with code 2."
+    });
+    const final = store.get(job.id);
+    if (final.status !== "failed" || final.phase !== "process.exited") throw new Error(`${final.status}/${final.phase}`);
+    if (final.finalMessage !== "done") throw new Error("final message was lost");
+    return `${final.status}/${final.phase}/${final.exitCode}`;
+  });
+
+  await expect("job store returns bounded log tails", async () => {
+    const store = new JobStore(tempRoot, { logsDir: join(tempRoot, "tail-logs") });
+    await store.init();
+    const job = await store.create({
+      type: "task",
+      cwd: tempWorkspace,
+      originalCwd: tempWorkspace,
+      profile: "read-only",
+      sandbox: "read-only",
+      prompt: "TAIL_PROMPT"
+    });
+    await store.appendErr(job, "0123456789abcdef");
+    const tail = await store.readLogTail(job.id, "err", 6);
+    if (tail.text !== "abcdef") throw new Error(`tail was ${JSON.stringify(tail.text)}`);
+    if (!tail.truncated) throw new Error("tail should be truncated");
+    return `${tail.bytesRead}/${tail.size}`;
+  });
+
   await expect("job store writes private log files", async () => {
     const oldUmask = process.umask(0o022);
     try {
@@ -686,6 +858,39 @@ console.log(JSON.stringify({ type: "turn.completed", usage: { total_tokens: 1 } 
     return `${completed.id} ${completed.threadId}`;
   });
 
+  await expect("fake Codex completed event with nonzero exit fails job", async () => {
+    const fakeCodex = join(tempRoot, "fake-codex-complete-nonzero.mjs");
+    const fakeConfig = join(tempRoot, "fake-complete-nonzero-config.json");
+    await writeFile(fakeCodex, `#!/usr/bin/env node
+console.log(JSON.stringify({ type: "thread.started", thread_id: "fake-thread-nonzero" }));
+console.log(JSON.stringify({ type: "turn.completed", usage: { total_tokens: 1 } }));
+process.exit(2);
+`, "utf8");
+    await chmod(fakeCodex, 0o755);
+    await writeFile(fakeConfig, JSON.stringify({
+      defaultProfile: "workspace-write",
+      cwdAllowlist: [tempWorkspace],
+      codexBin: fakeCodex,
+      maxConcurrentJobs: 2
+    }), "utf8");
+    const store = new JobStore(tempRoot, { logsDir: join(tempRoot, "fake-complete-nonzero-logs") });
+    await store.init();
+    const job = await startCodexJob({
+      jobStore: store,
+      env: { ...process.env, CODEX_BIN: fakeCodex, COWORK_CODEX_LOCAL_CONFIG: fakeConfig }
+    }, {
+      type: "task",
+      prompt: "COMPLETE_THEN_NONZERO",
+      cwd: tempWorkspace,
+      profile: "read-only"
+    });
+    const failed = await waitForJob(store, job.id, 10);
+    if (failed.status !== "failed") throw new Error(`fake nonzero job ended ${failed.status}`);
+    if (failed.phase !== "process.exited") throw new Error(`unexpected phase ${failed.phase}`);
+    if (failed.exitCode !== 2) throw new Error(`exitCode was ${failed.exitCode}`);
+    return `${failed.status}/${failed.phase}/${failed.exitCode}`;
+  });
+
   await expect("full-local-access profile maps to danger-full-access argv", async () => {
     const fakeCodex = join(tempRoot, "fake-codex-full-local.mjs");
     const fakeConfig = join(tempRoot, "fake-full-local-config.json");
@@ -719,6 +924,73 @@ console.log(JSON.stringify({ type: "turn.completed", usage: { total_tokens: 1 } 
       throw new Error(`argsPreview missing danger-full-access: ${JSON.stringify(args)}`);
     }
     return args.join(" ");
+  });
+
+  await expect("allowedProfiles can disable full-local-access", async () => {
+    const fakeCodex = join(tempRoot, "fake-codex-profile-disabled.mjs");
+    const fakeConfig = join(tempRoot, "fake-profile-disabled-config.json");
+    await writeFile(fakeCodex, `#!/usr/bin/env node
+console.log(JSON.stringify({ type: "turn.completed", usage: { total_tokens: 1 } }));
+`, "utf8");
+    await chmod(fakeCodex, 0o755);
+    await writeFile(fakeConfig, JSON.stringify({
+      defaultProfile: "workspace-write",
+      cwdAllowlist: [tempWorkspace],
+      allowedProfiles: ["read-only", "workspace-write"],
+      codexBin: fakeCodex,
+      maxConcurrentJobs: 2
+    }), "utf8");
+    const store = new JobStore(tempRoot, { logsDir: join(tempRoot, "profile-disabled-logs") });
+    await store.init();
+    let message = "";
+    try {
+      await startCodexJob({
+        jobStore: store,
+        env: { ...process.env, CODEX_BIN: fakeCodex, COWORK_CODEX_LOCAL_CONFIG: fakeConfig }
+      }, {
+        type: "task",
+        prompt: "PROFILE_DISABLED_PROMPT",
+        cwd: tempWorkspace,
+        profile: "full-local-access"
+      });
+    } catch (error) {
+      message = error.message;
+    }
+    if (!message.includes("not enabled in local config")) throw new Error(`unexpected profile rejection: ${message}`);
+    return message;
+  });
+
+  await expect("allowedProfiles invalid list rejects default profile", async () => {
+    const fakeCodex = join(tempRoot, "fake-codex-profile-invalid.mjs");
+    const fakeConfig = join(tempRoot, "fake-profile-invalid-config.json");
+    await writeFile(fakeCodex, `#!/usr/bin/env node
+console.log(JSON.stringify({ type: "turn.completed", usage: { total_tokens: 1 } }));
+`, "utf8");
+    await chmod(fakeCodex, 0o755);
+    await writeFile(fakeConfig, JSON.stringify({
+      defaultProfile: "workspace-write",
+      cwdAllowlist: [tempWorkspace],
+      allowedProfiles: ["workspace_write"],
+      codexBin: fakeCodex,
+      maxConcurrentJobs: 2
+    }), "utf8");
+    const store = new JobStore(tempRoot, { logsDir: join(tempRoot, "profile-invalid-logs") });
+    await store.init();
+    let message = "";
+    try {
+      await startCodexJob({
+        jobStore: store,
+        env: { ...process.env, CODEX_BIN: fakeCodex, COWORK_CODEX_LOCAL_CONFIG: fakeConfig }
+      }, {
+        type: "task",
+        prompt: "PROFILE_INVALID_PROMPT",
+        cwd: tempWorkspace
+      });
+    } catch (error) {
+      message = error.message;
+    }
+    if (!message.includes("not enabled in local config")) throw new Error(`unexpected profile rejection: ${message}`);
+    return message;
   });
 
   await expect("concurrency cap rejects extra active job", async () => {
@@ -867,6 +1139,40 @@ setInterval(() => {}, 1000);
     return `${failed.phase}: ${failed.errorMessage || ""}`.slice(0, 160);
   });
 
+  await expect("early non-json child exit marks job failed", async () => {
+    const fakeCodex = join(tempRoot, "fake-codex-early-exit.mjs");
+    const fakeConfig = join(tempRoot, "fake-early-exit-config.json");
+    await writeFile(fakeCodex, `#!/usr/bin/env node
+console.error("boom");
+process.exit(1);
+`, "utf8");
+    await chmod(fakeCodex, 0o755);
+    await writeFile(fakeConfig, JSON.stringify({
+      defaultProfile: "workspace-write",
+      cwdAllowlist: [tempWorkspace],
+      codexBin: fakeCodex,
+      maxConcurrentJobs: 2
+    }), "utf8");
+    const store = new JobStore(tempRoot, { logsDir: join(tempRoot, "early-exit-logs") });
+    await store.init();
+    const job = await startCodexJob({
+      jobStore: store,
+      env: { ...process.env, CODEX_BIN: fakeCodex, COWORK_CODEX_LOCAL_CONFIG: fakeConfig }
+    }, {
+      type: "task",
+      prompt: "EARLY_EXIT_SHOULD_FAIL",
+      cwd: tempWorkspace,
+      profile: "read-only"
+    });
+    const failed = await waitForJob(store, job.id, 10);
+    if (failed.status !== "failed") throw new Error(`early exit job ended ${failed.status}`);
+    if (failed.phase !== "process.exited") throw new Error(`unexpected phase ${failed.phase}`);
+    if (failed.exitCode !== 1) throw new Error(`exitCode was ${failed.exitCode}`);
+    if (store.activeCount() !== 0) throw new Error(`job remained active: ${store.activeCount()}`);
+    if (failed.errorMessage === "code is not defined") throw new Error("close handler lost exit arguments");
+    return `${failed.phase}: ${failed.errorMessage || ""}`.slice(0, 160);
+  });
+
   await expect("initialize", async () => {
     const response = await send("initialize", {
       protocolVersion: "2025-06-18",
@@ -889,7 +1195,7 @@ setInterval(() => {}, 1000);
     const response = await send("tools/list");
     const tools = response.result?.tools || [];
     toolNames = tools.map((tool) => tool.name).sort();
-    const expected = ["codex_cancel_job", "codex_cwd_allowlist", "codex_delegate", "codex_job_result", "codex_job_status", "codex_set_max_concurrent_jobs", "codex_setup", "codex_start_review", "codex_start_task"].sort();
+    const expected = ["codex_cancel_job", "codex_cwd_allowlist", "codex_delegate", "codex_job_logs", "codex_job_result", "codex_job_status", "codex_set_max_concurrent_jobs", "codex_setup", "codex_start_review", "codex_start_task"].sort();
     for (const name of expected) {
       if (!toolNames.includes(name)) throw new Error(`missing ${name}`);
     }
@@ -978,6 +1284,45 @@ setInterval(() => {}, 1000);
     if (result.changed) throw new Error(`duplicate add changed list: ${JSON.stringify(result)}`);
     if (result.added.length !== 0) throw new Error(`duplicate add reported additions: ${JSON.stringify(result.added)}`);
     return "unchanged";
+  });
+
+  await expect("codex_cwd_allowlist rejects filesystem root", async () => {
+    const response = await callTool("codex_cwd_allowlist", { action: "add", path: parseRootPath(tempWorkspace) }, 30000);
+    const message = response.result?.structuredContent?.error?.message || "";
+    if (!response.result?.isError || !message.includes("must not be the filesystem root")) {
+      throw new Error(`expected root rejection, got ${JSON.stringify(response)}`);
+    }
+    return message;
+  });
+
+  await expect("codex_cwd_allowlist respects allowlistEdits false", async () => {
+    const configBefore = JSON.parse(await readFile(tempConfig, "utf8"));
+    await writeFile(tempConfig, `${JSON.stringify({ ...configBefore, allowlistEdits: false }, null, 2)}\n`, "utf8");
+    try {
+      const response = await callTool("codex_cwd_allowlist", { action: "add", path: extraWorkspace }, 30000);
+      const message = response.result?.structuredContent?.error?.message || "";
+      if (!response.result?.isError || !message.includes("edits are disabled")) {
+        throw new Error(`expected allowlistEdits rejection, got ${JSON.stringify(response)}`);
+      }
+      return message;
+    } finally {
+      await writeFile(tempConfig, `${JSON.stringify(configBefore, null, 2)}\n`, "utf8");
+    }
+  });
+
+  await expect("codex_cwd_allowlist fails closed for invalid allowlistEdits", async () => {
+    const configBefore = JSON.parse(await readFile(tempConfig, "utf8"));
+    await writeFile(tempConfig, `${JSON.stringify({ ...configBefore, allowlistEdits: "false" }, null, 2)}\n`, "utf8");
+    try {
+      const response = await callTool("codex_cwd_allowlist", { action: "add", path: extraWorkspace }, 30000);
+      const message = response.result?.structuredContent?.error?.message || "";
+      if (!response.result?.isError || !message.includes("edits are disabled")) {
+        throw new Error(`expected invalid allowlistEdits rejection, got ${JSON.stringify(response)}`);
+      }
+      return message;
+    } finally {
+      await writeFile(tempConfig, `${JSON.stringify(configBefore, null, 2)}\n`, "utf8");
+    }
   });
 
   await expect("codex_cwd_allowlist removes stale absolute entries", async () => {
@@ -1156,6 +1501,17 @@ setInterval(() => {}, 1000);
     return `${result.status}/${result.phase}`;
   });
 
+  await expect("codex_job_logs returns bounded log tail", async () => {
+    const response = await callTool("codex_job_logs", { id: cancelJobId, stream: "events", tail_bytes: 128 }, 30000);
+    if (response.result?.isError) throw new Error(JSON.stringify(response.result.structuredContent));
+    const result = data(response);
+    if (result.id !== cancelJobId) throw new Error(`expected ${cancelJobId}, got ${result.id}`);
+    if (result.stream !== "events") throw new Error(`stream was ${result.stream}`);
+    if (result.bytesRead > 128) throw new Error(`read too many bytes: ${result.bytesRead}`);
+    if (typeof result.text !== "string") throw new Error("missing log text");
+    return `${result.stream} ${result.bytesRead}/${result.size}`;
+  });
+
   await expect("bare codex_job_result returns latest terminal job", async () => {
     const response = await callTool("codex_job_result", {});
     const result = data(response);
@@ -1211,7 +1567,8 @@ setInterval(() => {}, 1000);
       resume: "latest",
       wait_seconds: 60
     }, 180000);
-    const job = data(response).job;
+    const started = data(response).job;
+    const job = started.status === "completed" ? started : await waitForToolJobComplete(started.id, 240);
     resumedThreadId = job.threadId;
     if (job.status !== "completed") throw new Error(`resume latest ended ${job.status}: ${job.errorMessage || ""}`);
     if (job.threadId !== completedThreadId) throw new Error(`resume latest used ${job.threadId}, expected ${completedThreadId}`);
@@ -1231,7 +1588,8 @@ setInterval(() => {}, 1000);
       resume: resumedThreadId || completedThreadId,
       wait_seconds: 60
     }, 180000);
-    const job = data(response).job;
+    const started = data(response).job;
+    const job = started.status === "completed" ? started : await waitForToolJobComplete(started.id, 240);
     if (job.status !== "completed") throw new Error(`resume explicit ended ${job.status}: ${job.errorMessage || ""}`);
     if (job.threadId !== completedThreadId) throw new Error(`resume explicit used ${job.threadId}, expected ${completedThreadId}`);
     const resultResponse = await callTool("codex_job_result", { id: job.id });

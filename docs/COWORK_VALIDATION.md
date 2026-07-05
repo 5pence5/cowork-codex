@@ -16,6 +16,7 @@ Use this checklist after installing or updating the plugin in Claude Cowork.
    - `codex_start_review`
    - `codex_job_status`
    - `codex_job_result`
+   - `codex_job_logs`
    - `codex_cancel_job`
 
 ## Setup
@@ -84,3 +85,10 @@ Confirm the file appears on the host machine and Cowork sees it.
 2. Cancel it with `codex_cancel_job`.
 3. Confirm final status is `cancelled`.
 4. Confirm no child process continues doing work in the target repo.
+
+## Job Logs
+
+1. Run `/logs <job-id> err` for a recent job.
+2. Confirm the response includes `stream`, `bytesRead`, `size`, `truncated`, and log text.
+3. Run `/logs <job-id> events --tail-bytes 32768`.
+4. Confirm the response is bounded and does not require reading host log paths directly.

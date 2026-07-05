@@ -1,19 +1,21 @@
 #!/usr/bin/env node
 import readline from "node:readline";
+import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MAX_CONCURRENT_JOBS_LIMIT, collectCodexSetup, localConfigPath, readLocalConfig, setLocalMaxConcurrentJobs, updateLocalCwdAllowlist } from "../src/codex-discovery.mjs";
 import { JobStore } from "../src/job-store.mjs";
 import { cancelActiveJobs, cancelJob, createRunnerContext, REVIEW_ENGINE, startCodexJob, waitForJob } from "../src/codex-runner.mjs";
 
-const SERVER_INFO = {
-  name: "cowork-codex",
-  version: "0.1.10"
-};
 const PROTOCOL_VERSION = "2025-06-18";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(here, "..");
+const packageJson = JSON.parse(await readFile(resolve(rootDir, "package.json"), "utf8"));
+const SERVER_INFO = {
+  name: "cowork-codex",
+  version: packageJson.version
+};
 const jobStore = new JobStore(rootDir, { logsDir: process.env.COWORK_CODEX_LOG_DIR });
 await jobStore.init();
 
@@ -152,6 +154,23 @@ const TOOLS = [
       type: "object",
       properties: {
         id: { type: "string", minLength: 1 }
+      },
+      additionalProperties: false
+    }
+  },
+  {
+    name: "codex_job_logs",
+    description: "Return a bounded tail from a job log stream: out, err, or events.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string", minLength: 1 },
+        stream: { type: "string", enum: ["out", "err", "events"] },
+        tail_bytes: {
+          type: "number",
+          description: "Maximum bytes to return. Defaults to 65536 and is capped at 262144."
+        }
       },
       additionalProperties: false
     }
@@ -434,6 +453,8 @@ async function callTool(name, args) {
         errorMessage: job.errorMessage
       };
     }
+    case "codex_job_logs":
+      return jobStore.readLogTail(args.id, args.stream || "err", args.tail_bytes);
     case "codex_cancel_job": {
       const job = await cancelJob(jobStore, args.id);
       return { job: statusBody(job) };

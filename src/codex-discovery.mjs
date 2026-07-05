@@ -1,7 +1,7 @@
-import { access, mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, parse, resolve } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { buildCodexChildEnv, buildCodexChildPath } from "./child-env.mjs";
@@ -12,6 +12,7 @@ const execFileAsync = promisify(execFile);
 const TESTED_CODEX_VERSION = "codex-cli 0.142.5";
 const DEFAULT_LOCAL_CONFIG_PATH = defaultConfigPath();
 const DEFAULT_PROFILE_VALUES = new Set(["read-only", "workspace-write"]);
+const PROFILE_VALUES = new Set(["read-only", "workspace-write", "full-local-access"]);
 const DEFAULT_MAX_CONCURRENT_JOBS = 8;
 const MAX_CONCURRENT_JOBS_LIMIT = 8;
 
@@ -45,6 +46,16 @@ export function parseCodexLoginStatus(loginText = "", commandOk = false) {
   return {
     loggedIn: Boolean(commandOk && explicitlyLoggedIn && !explicitlyNotLoggedIn),
     method
+  };
+}
+
+function parseCodexCliVersion(value = "") {
+  const match = String(value).match(/\bcodex-cli\s+(\d+)\.(\d+)\.(\d+)\b/);
+  if (!match) return null;
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3])
   };
 }
 
@@ -147,6 +158,33 @@ function normalizeDefaultProfile(value, warnings) {
   return "workspace-write";
 }
 
+function normalizeAllowedProfiles(value, warnings = []) {
+  if (value === undefined || value === null) return [...PROFILE_VALUES];
+  if (!Array.isArray(value)) {
+    warnings.push("Ignoring allowedProfiles because it is not an array; no task profiles are enabled.");
+    return [];
+  }
+  const next = [];
+  for (const entry of value) {
+    if (PROFILE_VALUES.has(entry)) {
+      if (!next.includes(entry)) next.push(entry);
+    } else {
+      warnings.push(`Ignoring unsupported allowedProfiles entry "${String(entry)}".`);
+    }
+  }
+  if (next.length === 0) {
+    warnings.push("No supported allowedProfiles entries were configured; no task profiles are enabled.");
+  }
+  return next;
+}
+
+function normalizeAllowlistEdits(value, warnings = []) {
+  if (value === undefined || value === null) return true;
+  if (typeof value === "boolean") return value;
+  warnings.push("Ignoring allowlistEdits because it is not a boolean; Cowork-side allowlist edits are disabled.");
+  return false;
+}
+
 export function normalizeMaxConcurrentJobs(value, warnings = []) {
   if (value === undefined || value === null || value === "") return DEFAULT_MAX_CONCURRENT_JOBS;
   const parsed = Number(value);
@@ -191,7 +229,14 @@ async function readEditableLocalConfig(configPath) {
 
 async function writeEditableLocalConfig(configPath, parsed) {
   await mkdir(dirname(configPath), { recursive: true });
-  await writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
+  const tempPath = `${configPath}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    await writeFile(tempPath, `${JSON.stringify(parsed, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+    await rename(tempPath, configPath);
+  } catch (error) {
+    await rm(tempPath, { force: true }).catch(() => {});
+    throw error;
+  }
 }
 
 export async function setLocalMaxConcurrentJobs(configPath, value) {
@@ -231,7 +276,11 @@ async function validateAllowlistPath(value) {
   if (!info.isDirectory()) {
     throw new Error(`cwdAllowlist path is not a directory: ${value}`);
   }
-  return realpath(resolved);
+  const canonical = await realpath(resolved);
+  if (canonical === parse(canonical).root) {
+    throw new Error(`cwdAllowlist path must not be the filesystem root: ${value}`);
+  }
+  return canonical;
 }
 
 async function keyForAllowlistEntry(value) {
@@ -297,6 +346,9 @@ export async function updateLocalCwdAllowlist(configPath, action = "list", paths
   const warnings = [];
   if (parsed.cwdAllowlist !== undefined && !Array.isArray(parsed.cwdAllowlist)) {
     warnings.push("Replacing ignored cwdAllowlist because it is not an array.");
+  }
+  if (action !== "list" && normalizeAllowlistEdits(parsed.allowlistEdits, warnings) === false) {
+    throw new Error("cwdAllowlist edits are disabled by local config.");
   }
 
   let next = [...current];
@@ -376,6 +428,8 @@ export async function readLocalConfig(configPath) {
   const fallback = {
     defaultProfile: "workspace-write",
     cwdAllowlist: [],
+    allowedProfiles: [...PROFILE_VALUES],
+    allowlistEdits: true,
     maxConcurrentJobs: DEFAULT_MAX_CONCURRENT_JOBS,
     codexBin: null,
     codexBinConfigured: false,
@@ -404,6 +458,8 @@ export async function readLocalConfig(configPath) {
     return {
       defaultProfile: normalizeDefaultProfile(parsed.defaultProfile, fileWarnings),
       cwdAllowlist,
+      allowedProfiles: normalizeAllowedProfiles(parsed.allowedProfiles, fileWarnings),
+      allowlistEdits: normalizeAllowlistEdits(parsed.allowlistEdits, fileWarnings),
       maxConcurrentJobs: normalizeMaxConcurrentJobs(parsed.maxConcurrentJobs, fileWarnings),
       codexBin,
       codexBinConfigured: Boolean(codexBin),
@@ -417,6 +473,8 @@ export async function readLocalConfig(configPath) {
       return {
         defaultProfile: "workspace-write",
         cwdAllowlist: [],
+        allowedProfiles: [...PROFILE_VALUES],
+        allowlistEdits: true,
         maxConcurrentJobs: DEFAULT_MAX_CONCURRENT_JOBS,
         codexBin: null,
         codexBinConfigured: false,
@@ -451,8 +509,10 @@ export async function collectCodexSetup(env = process.env) {
   if (!codexResolution.path) {
     warnings.push("Codex binary was not found.");
   }
-  if (versionText && versionText !== TESTED_CODEX_VERSION) {
-    warnings.push(`Tested with ${TESTED_CODEX_VERSION}; found ${versionText}. Treat Codex upgrades as breaking until smoke-tested.`);
+  const testedVersion = parseCodexCliVersion(TESTED_CODEX_VERSION);
+  const foundVersion = parseCodexCliVersion(versionText);
+  if (versionText && (!testedVersion || !foundVersion || testedVersion.major !== foundVersion.major || testedVersion.minor !== foundVersion.minor)) {
+    warnings.push(`Tested with ${TESTED_CODEX_VERSION}; found ${versionText}. Run a smoke test after Codex major/minor upgrades.`);
   }
   if (localConfig.source === "error") {
     warnings.push(`Could not read local config: ${localConfig.error}`);

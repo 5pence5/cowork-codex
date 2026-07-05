@@ -1,15 +1,15 @@
 {
   "name": "cowork-codex",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "private": true,
   "type": "module",
   "description": "Use host Codex from Claude Cowork to review code or delegate tasks.",
   "license": "Apache-2.0",
   "engines": {
-    "node": ">=18.18.0"
+    "node": ">=18.20.0"
   },
   "scripts": {
-    "check": "node --check servers/cowork-codex-mcp.mjs && node --check bin/cowork-codex-mcp && node --check scripts/selftest.mjs && node --check scripts/install-cowork-plugin.mjs && node --check scripts/package-plugin.mjs && node --check src/child-env.mjs && node --check src/codex-discovery.mjs && node --check src/codex-runner.mjs && node --check src/command-invocation.mjs && node --check src/job-store.mjs && node --check src/path-map.mjs && node --check src/platform.mjs",
+    "check": "node --check servers/cowork-codex-mcp.mjs && node --check bin/cowork-codex-mcp && node --check scripts/selftest.mjs && node --check scripts/install-cowork-plugin.mjs && node --check scripts/package-plugin.mjs && node --check scripts/check-version-sync.mjs && node --check src/child-env.mjs && node --check src/codex-discovery.mjs && node --check src/codex-runner.mjs && node --check src/command-invocation.mjs && node --check src/job-store.mjs && node --check src/path-map.mjs && node --check src/platform.mjs && node scripts/check-version-sync.mjs",
     "install:cowork": "node scripts/install-cowork-plugin.mjs",
     "package:plugin": "node scripts/package-plugin.mjs",
     "selftest": "node scripts/selftest.mjs"

@@ -14,6 +14,8 @@ For same-file edits, use one write-capable Codex job at a time. The bridge does 
 
 Job logs are append-only until deleted. There is no compaction or retention policy yet.
 
+Cowork can inspect bounded log tails with `/logs`, but retention is still manual.
+
 Clear logs manually on Linux/macOS:
 
 ```bash

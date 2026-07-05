@@ -14,6 +14,12 @@ cat > ~/.config/cowork-codex/cowork-codex.local.json <<'JSON'
   "cwdAllowlist": [
     "/absolute/path/to/workspace"
   ],
+  "allowedProfiles": [
+    "read-only",
+    "workspace-write",
+    "full-local-access"
+  ],
+  "allowlistEdits": true,
   "codexBin": null,
   "maxConcurrentJobs": 8
 }
@@ -30,6 +36,12 @@ New-Item -ItemType Directory -Force "$env:APPDATA\cowork-codex" | Out-Null
   "cwdAllowlist": [
     "C:\\absolute\\path\\to\\workspace"
   ],
+  "allowedProfiles": [
+    "read-only",
+    "workspace-write",
+    "full-local-access"
+  ],
+  "allowlistEdits": true,
   "codexBin": null,
   "maxConcurrentJobs": 8
 }

@@ -20,7 +20,21 @@ const BASE_ENV_ALLOWLIST = new Set([
   "SHELL",
   "TMPDIR",
   "LANG",
-  "TERM"
+  "TERM",
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "ALL_PROXY",
+  "NO_PROXY",
+  "http_proxy",
+  "https_proxy",
+  "all_proxy",
+  "no_proxy",
+  "SSL_CERT_FILE",
+  "SSL_CERT_DIR",
+  "NODE_EXTRA_CA_CERTS",
+  "REQUESTS_CA_BUNDLE",
+  "CURL_CA_BUNDLE",
+  "GIT_SSL_CAINFO"
 ]);
 
 export const CHILD_ENV_ALLOWLIST = [
@@ -37,7 +51,21 @@ export const CHILD_ENV_ALLOWLIST = [
   "TMPDIR",
   "LANG",
   "LC_*",
-  "TERM"
+  "TERM",
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "ALL_PROXY",
+  "NO_PROXY",
+  "http_proxy",
+  "https_proxy",
+  "all_proxy",
+  "no_proxy",
+  "SSL_CERT_FILE",
+  "SSL_CERT_DIR",
+  "NODE_EXTRA_CA_CERTS",
+  "REQUESTS_CA_BUNDLE",
+  "CURL_CA_BUNDLE",
+  "GIT_SSL_CAINFO"
 ];
 
 export function buildCodexChildPath(sourceEnv = process.env, options = {}) {
