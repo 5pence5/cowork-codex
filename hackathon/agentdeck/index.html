@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en" data-theme="midnight">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AgentDeck — presentations that listen</title>
+  <meta
+    name="description"
+    content="An agent-native slide deck: your AI presents, animates, and builds slides live through WebMCP tool calls while you talk."
+  />
+  <link
+    rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎙️</text></svg>"
+  />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">🎙️</span>
+      <span class="brand-name">AgentDeck</span>
+    </div>
+    <div class="topbar-actions">
+      <span id="mcp-status" class="chip chip-warn" title="WebMCP connection status">WebMCP: checking…</span>
+      <button id="toggle-panel" class="btn" type="button">Console</button>
+      <button id="reset-deck" class="btn btn-quiet" type="button" title="Discard edits and restore the starter deck">
+        Reset
+      </button>
+    </div>
+  </header>
+
+  <main class="stage-wrap">
+    <div id="stage" class="stage" aria-live="polite"></div>
+  </main>
+
+  <footer class="footbar">
+    <div id="progress" class="progress" aria-label="Slide progress"></div>
+    <p class="hint">
+      Your agent drives via WebMCP — or use ← → keys.
+      <span class="hint-strong">Try saying: “Get the deck and present it to me.”</span>
+    </p>
+  </footer>
+
+  <aside id="panel" class="panel" hidden>
+    <div class="panel-head">
+      <h2>Agent console</h2>
+      <button id="close-panel" class="btn btn-quiet" type="button">×</button>
+    </div>
+    <p class="panel-sub">
+      Live log of tool calls. No WebMCP browser handy? Run any tool by hand below to simulate the agent.
+    </p>
+    <div id="log" class="log" aria-live="polite"></div>
+    <form id="runner" class="runner">
+      <label class="runner-label" for="runner-tool">Simulate a tool call</label>
+      <div class="runner-row">
+        <select id="runner-tool"></select>
+        <button class="btn btn-accent" type="submit">Run</button>
+      </div>
+      <textarea id="runner-args" rows="3" spellcheck="false" placeholder="{}">{}</textarea>
+    </form>
+  </aside>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
