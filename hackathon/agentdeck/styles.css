@@ -326,6 +326,81 @@ body {
   font-size: clamp(0.9rem, 2.2cqw, 1.2rem);
 }
 
+/* diagram layout */
+.layout-diagram .body {
+  max-width: none;
+  width: 100%;
+  text-align: center;
+}
+
+.layout-diagram .visual {
+  display: none;
+}
+
+.diagram-frame {
+  margin-top: 0.6em;
+}
+
+.diagram-frame svg {
+  width: min(100%, 56rem);
+  height: auto;
+  max-height: 62vh;
+}
+
+.layout-diagram .bullets {
+  display: inline-grid;
+  text-align: left;
+}
+
+/* audience question card */
+.question-card {
+  position: absolute;
+  left: 50%;
+  bottom: 1.4rem;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-start;
+  max-width: min(82%, 46rem);
+  padding: 0.75rem 1.1rem;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--accent-2);
+  border-radius: 0.9rem;
+  box-shadow: var(--shadow);
+  z-index: 5;
+  animation: question-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes question-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 16px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.question-icon {
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+
+.question-text {
+  margin: 0;
+  font-size: clamp(0.9rem, 2.3cqw, 1.3rem);
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.question-cite {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
 /* code */
 .codewrap {
   margin-top: 1.2em;

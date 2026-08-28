@@ -9,9 +9,9 @@ const SLIDE_SPEC_SCHEMA = {
   properties: {
     layout: {
       type: 'string',
-      enum: ['title', 'bullets', 'split', 'code', 'fact', 'quote'],
+      enum: ['title', 'bullets', 'split', 'code', 'fact', 'quote', 'diagram'],
       description:
-        'title: opening slide, everything appears at once. bullets: heading plus bullets revealed one advance at a time. split: emoji visual beside revealed bullets. code: heading, optional bullets, then a code block as the final reveal. fact: one huge statistic. quote: a pull quote.',
+        'title: opening slide, everything appears at once. bullets: heading plus bullets revealed one advance at a time. split: emoji visual beside revealed bullets. code: heading, optional bullets, then a code block as the final reveal. fact: one huge statistic. quote: a pull quote. diagram: heading plus an SVG diagram (see svg field).',
     },
     title: { type: 'string' },
     subtitle: { type: 'string', description: 'Supporting line under the title.' },
@@ -43,6 +43,11 @@ const SLIDE_SPEC_SCHEMA = {
         attribution: { type: 'string' },
       },
     },
+    svg: {
+      type: 'string',
+      description:
+        'Inline SVG markup for a diagram (use a viewBox; scripts are stripped). Give the parts you will talk about id attributes — zoom_to can then focus each region by id. Use CSS variables for colors so the diagram matches every theme: var(--text), var(--text-dim), var(--accent), var(--accent-2), var(--surface-2), var(--line).',
+    },
     notes: {
       type: 'string',
       description: 'Speaker notes: what to say while this slide is on screen.',
@@ -62,9 +67,20 @@ export function buildTools(deck) {
     {
       name: 'get_deck',
       description:
-        'Call this first. Returns the full deck outline, the current slide and reveal step, the current speaker notes, and what the next advance call will reveal. Use it to orient yourself before presenting or editing.',
-      inputSchema: { type: 'object', properties: {} },
-      handler: () => `Deck outline (→ marks the current slide):\n${deck.outline()}\n\n${positionReport(deck)}`,
+        'Call this first. Returns the full deck outline, the current slide and reveal step, the current speaker notes, and what the next advance call will reveal. Use it to orient yourself before presenting or editing. Pass include_specs to also get every slide as JSON — useful for fleshing a live outline out into a fuller presentation.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          include_specs: {
+            type: 'boolean',
+            description: 'Also return all slides as JSON specs (the format add_slide accepts).',
+          },
+        },
+      },
+      handler: ({ include_specs = false } = {}) => {
+        const specs = include_specs ? `\n\nSlide specs (add_slide format):\n${JSON.stringify(deck.slides, null, 1)}` : '';
+        return `Deck outline (→ marks the current slide):\n${deck.outline()}\n\n${positionReport(deck)}${specs}`;
+      },
     },
     {
       name: 'advance',
@@ -198,6 +214,48 @@ export function buildTools(deck) {
         return ok
           ? `Spotlighting ${target} for a few seconds.`
           : `Nothing matches “${target}” on this slide — it may not be revealed yet.`;
+      },
+    },
+    {
+      name: 'zoom_to',
+      description:
+        'Cinematic camera move: smoothly zoom the current slide until one element fills the stage — a diagram region by its SVG id (e.g. "attention"), or "bullet 2", "code", "fact", "diagram". Use it while explaining that part ("now, zooming into the attention head…"), then call again with target "reset" to pull back before moving on.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          target: {
+            type: 'string',
+            description: 'An element id from the slide\'s SVG, "bullet N", "title", "code", "fact", "diagram" — or "reset" to zoom back out.',
+          },
+        },
+        required: ['target'],
+      },
+      handler: ({ target }) => {
+        const r = deck.zoomTo(target);
+        if (!r.ok) return `Could not zoom: ${r.reason}.`;
+        if (r.reset) return 'Zoomed back out to the full slide.';
+        return `Zoomed in on “${target}” (${r.scale}×). Call zoom_to with target "reset" before advancing.`;
+      },
+    },
+    {
+      name: 'show_question',
+      description:
+        'Put an audience question on screen as a card over the current slide — use it the moment a listener asks something, so the room sees the question while you answer. Call with clear=true to dismiss the card when you are done answering.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: 'The question, as asked.' },
+          attribution: { type: 'string', description: 'Optional: who asked.' },
+          clear: { type: 'boolean', description: 'Dismiss the current question card instead of showing one.' },
+        },
+      },
+      handler: ({ text, attribution, clear = false }) => {
+        if (clear) {
+          return deck.clearQuestion() ? 'Question card dismissed.' : 'There was no question card on screen.';
+        }
+        if (!text) return 'Provide the question text, or pass clear=true to dismiss.';
+        deck.showQuestion(text, attribution);
+        return `Showing the question: “${text}”. Answer it aloud, then call show_question with clear=true.`;
       },
     },
     {

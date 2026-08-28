@@ -20,15 +20,19 @@ Because slides are structured JSON specs rather than markup, `add_slide` lets th
 
 | Tool | What it does |
 | --- | --- |
-| `get_deck` | Deck outline, current position, speaker notes, next reveal. Call first. |
+| `get_deck` | Deck outline, current position, speaker notes, next reveal. Call first. `include_specs` returns every slide as JSON — the raw material for fleshing a live outline out into a full presentation. |
 | `advance` | Reveal the next element (or move to the next slide); returns what appeared. |
 | `back` | Hide the last reveal or return to the previous slide. |
 | `goto_slide` | Jump to a slide by number or id, optionally pre-revealed. |
-| `add_slide` | Create a slide from a JSON spec (layouts: title, bullets, split, code, fact, quote). |
+| `add_slide` | Create a slide from a JSON spec (layouts: title, bullets, split, code, fact, quote, diagram — diagrams are inline SVG with id-tagged regions). |
 | `update_slide` | Patch an existing slide; re-renders live if on screen. |
 | `remove_slide` | Delete a slide. |
 | `spotlight` | Dim the slide and emphasise one element for a few seconds. |
+| `zoom_to` | Prezi-style camera move onto one element — e.g. a diagram region by SVG id — then `reset` to pull back. |
+| `show_question` | Put an audience question on screen as a card while you answer it; `clear` dismisses. |
 | `set_theme` | Switch theme: midnight, paper, aurora. |
+
+The starter deck includes a transformer-encoder diagram: say *"now let's zoom into the attention head"* and the agent calls `zoom_to("attention")` — the attention formula is only legible once the camera is in.
 
 ## Run it
 
@@ -48,11 +52,13 @@ Deck edits persist in `localStorage`; `Reset` restores the starter deck.
 
 ## Demo script (for the submission video)
 
-1. Open the deck in the ChatGPT in-app browser; point at the "9 tools live" chip.
+1. Open the deck in the ChatGPT in-app browser; point at the "11 tools live" chip.
 2. Say "get the deck and present it to me" — let the agent narrate through the starter deck, reveals landing as it speaks (open the console panel so tool calls are visible).
-3. Mid-presentation, ask an off-script question ("wait — how does this compare to screen-reading agents?").
-4. The agent answers by **creating a new slide live** (`add_slide` with `present: true`) and presenting it.
+3. On the transformer slide: "zoom into the attention head" — the camera dives into the diagram and the formula becomes legible. Then "zoom back out".
+4. Mid-presentation, ask an off-script question ("what paper first showed this?") — the question appears on screen via `show_question`, and the agent answers by **creating a new slide live** (`add_slide` with `present: true`).
 5. Ask it to "make it feel warmer" → `set_theme paper`. Close on the "Try it" slide.
+
+AgentDeck also works the other way around: **you** present while the agent listens and drives — revealing points, zooming, and posting audience questions as you speak. Tell it: "I'll present; follow along silently and keep the slides in sync with what I say."
 
 ## Known constraints
 

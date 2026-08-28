@@ -17,6 +17,20 @@ function el(tag, className, text) {
   return node;
 }
 
+// Basic hygiene for agent-supplied SVG markup: keep shapes and ids, drop
+// anything executable.
+function sanitizeSvg(markup) {
+  const box = document.createElement('div');
+  box.innerHTML = markup;
+  box.querySelectorAll('script, foreignObject').forEach((n) => n.remove());
+  box.querySelectorAll('*').forEach((n) => {
+    [...n.attributes].forEach((a) => {
+      if (/^on/i.test(a.name) || /javascript:/i.test(a.value)) n.removeAttribute(a.name);
+    });
+  });
+  return box.querySelector('svg');
+}
+
 export class Deck {
   constructor(stage, slides, { onChange } = {}) {
     this.stage = stage;
@@ -42,6 +56,9 @@ export class Deck {
     let frag = 0;
 
     const root = el('section', `slide layout-${slide.layout}${animate ? ' enter' : ''}`);
+    // The entrance animation must release its hold on `transform` once it
+    // finishes, or zoomTo's inline transform would be ignored.
+    root.addEventListener('animationend', () => root.classList.remove('enter'), { once: true });
     const nextFrag = (node, label) => {
       frag += 1;
       node.dataset.frag = String(frag);
@@ -70,6 +87,14 @@ export class Deck {
     } else {
       if (slide.title) body.appendChild(el(slide.layout === 'title' ? 'h1' : 'h2', 'title', slide.title));
       if (slide.subtitle) body.appendChild(el('p', 'subtitle', slide.subtitle));
+    }
+
+    if (slide.svg) {
+      const frame = el('div', 'diagram-frame');
+      const svg = sanitizeSvg(slide.svg);
+      if (svg) frame.appendChild(svg);
+      else frame.appendChild(el('p', 'subtitle', '(diagram markup was invalid)'));
+      body.appendChild(frame);
     }
 
     if (Array.isArray(slide.bullets) && slide.bullets.length && slide.layout !== 'title') {
@@ -213,24 +238,31 @@ export class Deck {
 
   // --- presentation effects -------------------------------------------------
 
+  resolveTarget(target) {
+    const slide = this.stage.querySelector('.slide');
+    if (!slide) return null;
+    const t = String(target).trim();
+    const m = /^bullet\s*(\d+)$/i.exec(t);
+    if (m) return slide.querySelectorAll('.bullet')[Number(m[1]) - 1] || null;
+    const map = {
+      title: '.title, .fact-title',
+      subtitle: '.subtitle',
+      code: '.codewrap',
+      fact: '.fact',
+      quote: '.quote',
+      visual: '.visual',
+      diagram: '.diagram-frame',
+    };
+    const sel = map[t.toLowerCase()];
+    if (sel) return slide.querySelector(sel);
+    // Fall back to an element id, e.g. a region inside a diagram's SVG.
+    return slide.querySelector(`#${CSS.escape(t.replace(/^#/, ''))}`);
+  }
+
   spotlight(target) {
     const slide = this.stage.querySelector('.slide');
     if (!slide) return false;
-    let node = null;
-    const m = /^bullet\s*(\d+)$/i.exec(String(target).trim());
-    if (m) node = slide.querySelectorAll('.bullet')[Number(m[1]) - 1];
-    else {
-      const map = {
-        title: '.title, .fact-title',
-        subtitle: '.subtitle',
-        code: '.codewrap',
-        fact: '.fact',
-        quote: '.quote',
-        visual: '.visual',
-      };
-      const sel = map[String(target).trim().toLowerCase()];
-      if (sel) node = slide.querySelector(sel);
-    }
+    const node = this.resolveTarget(target);
     if (!node) return false;
     slide.classList.add('dimmed');
     node.classList.add('spot');
@@ -239,6 +271,67 @@ export class Deck {
       slide.classList.remove('dimmed');
       node.classList.remove('spot');
     }, 4000);
+    return true;
+  }
+
+  // Prezi-style camera move: scale and pan the whole slide so one element
+  // fills the stage. Pass 'reset' to pull back out.
+  zoomTo(target, maxScale = 8) {
+    const slide = this.stage.querySelector('.slide');
+    if (!slide) return { ok: false, reason: 'no slide on stage' };
+    slide.classList.remove('enter'); // the entrance animation would override the zoom transform
+
+    if (String(target).trim().toLowerCase() === 'reset') {
+      slide.style.transition = 'transform 0.9s cubic-bezier(0.22, 1, 0.36, 1)';
+      slide.style.transform = '';
+      return { ok: true, reset: true };
+    }
+
+    const node = this.resolveTarget(target);
+    if (!node) return { ok: false, reason: `nothing on this slide matches “${target}”` };
+    if (node.classList?.contains('frag') && !node.classList.contains('on')) {
+      return { ok: false, reason: `“${target}” has not been revealed yet — advance first` };
+    }
+
+    // Measure in the untransformed state so repeated zooms stay accurate.
+    slide.style.transition = 'none';
+    slide.style.transform = '';
+    void slide.offsetWidth;
+    const stageR = this.stage.getBoundingClientRect();
+    const tR = node.getBoundingClientRect();
+    if (!tR.width || !tR.height) return { ok: false, reason: `“${target}” has no visible area` };
+
+    const pad = 0.72;
+    let k = Math.min((stageR.width * pad) / tR.width, (stageR.height * pad) / tR.height);
+    k = Math.min(Math.max(k, 1.15), maxScale);
+    const cx = tR.left + tR.width / 2 - stageR.left;
+    const cy = tR.top + tR.height / 2 - stageR.top;
+    const dx = stageR.width / 2 - k * cx;
+    const dy = stageR.height / 2 - k * cy;
+
+    slide.style.transformOrigin = '0 0';
+    void slide.offsetWidth;
+    slide.style.transition = 'transform 0.9s cubic-bezier(0.22, 1, 0.36, 1)';
+    slide.style.transform = `translate(${dx}px, ${dy}px) scale(${k})`;
+    return { ok: true, scale: Number(k.toFixed(2)) };
+  }
+
+  showQuestion(text, attribution) {
+    this.clearQuestion();
+    const card = el('div', 'question-card');
+    card.appendChild(el('div', 'question-icon', '🙋'));
+    const body = el('div', 'question-body');
+    body.appendChild(el('p', 'question-text', `“${text}”`));
+    if (attribution) body.appendChild(el('div', 'question-cite', attribution));
+    card.appendChild(body);
+    this.stage.appendChild(card);
+    return true;
+  }
+
+  clearQuestion() {
+    const card = this.stage.querySelector('.question-card');
+    if (!card) return false;
+    card.remove();
     return true;
   }
 
