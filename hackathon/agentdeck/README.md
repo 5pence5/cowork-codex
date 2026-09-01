@@ -1,67 +1,131 @@
 # AgentDeck
 
-Presentations that listen. AgentDeck is a web slide deck that hands your AI agent the remote: through [WebMCP](https://webmcp.devpost.com/), the page registers tools that let an agent present slide by slide, trigger reveals and spotlights in sync with its own narration, and build brand-new slides mid-conversation when the audience asks a question the deck did not anticipate.
+**Presentations that listen.** AgentDeck is a web presentation system that gives an AI agent an explicit, structured remote through WebMCP. The agent can present beat by beat, keep narration aligned with what appears, focus the audience's attention and adapt the deck when the conversation changes.
 
 Built for the OpenAI WebMCP Challenge.
 
-## Why it works
+## The product idea
 
-The core trick is the reveal-sync loop:
+A normal deck is a static file controlled by a human clicker. AgentDeck turns the presentation into a shared control loop:
 
-1. The agent calls the `advance` tool.
-2. The tool reveals the next element with an animation and **returns the text of what just appeared**, plus the speaker notes and what the next reveal will be.
-3. The agent narrates exactly that, then advances again.
+1. the agent observes the current presentation state;
+2. it commits one meaningful presentation action;
+3. the controller updates one canonical state;
+4. the screen and the agent both receive projections of that same transition;
+5. the next decision begins from an explicit, versioned observation.
 
-Narration and on-screen motion cannot drift apart, because the screen is the source of truth for what to say next. In voice mode this plays like a live explainer video; in text mode it reads like a guided tour.
+That architecture is stronger than asking an agent to infer slide state from memory or the DOM. The presenter, audience, agent and browser remain synchronised even when the route changes.
 
-Because slides are structured JSON specs rather than markup, `add_slide` lets the agent create a polished, animated slide from a single tool call — fast enough to do live, mid-sentence.
+## Current prototype
 
-## Tools
+The branch currently contains a dependency-free prototype with:
+
+- slide navigation and incremental reveals;
+- live slide creation, updating and removal;
+- spotlight and cinematic zoom;
+- an audience-question overlay;
+- three themes;
+- keyboard navigation and a tool-call simulator;
+- local persistence;
+- a self-explaining starter deck.
+
+The current implementation exposes eleven tools and demonstrates the core interaction. The v2 documents below define the coherent target architecture and the migration path; they should not be read as claims that every v2 contract is already implemented.
+
+## Canonical design documents
+
+Read these in order:
+
+1. [System Architecture](docs/SYSTEM.md) — the closed loop, abstraction tower, planes and invariants.
+2. [Control Protocol](docs/PROTOCOL.md) — observations, commands, result envelopes and mode-scoped tool bundles.
+3. [Accretion Model](docs/ACCRETION.md) — how sessions improve future decks without uncontrolled self-modification.
+4. [Architectural Decisions](docs/DECISIONS.md) — settled choices and rejected alternatives.
+5. [Implementation Roadmap](docs/ROADMAP.md) — dependency-ordered migration and acceptance gates.
+6. [Demo Runbook](docs/DEMO_RUNBOOK.md) — deterministic rehearsal, stage operation and fallback.
+
+Agents modifying this folder should begin with [AGENTS.md](AGENTS.md).
+
+## Why the current reveal loop works
+
+In the prototype:
+
+1. the agent calls `advance`;
+2. the page reveals the next fragment or enters the next slide;
+3. the tool returns a report of the new position, speaker notes and the next reveal;
+4. the agent narrates and advances again.
+
+The target architecture generalises this into explicit beats and structured state deltas. In particular, slide entry becomes a beat so facts, diagrams and quotations visible on arrival are reported completely.
+
+## Current prototype tools
 
 | Tool | What it does |
 | --- | --- |
-| `get_deck` | Deck outline, current position, speaker notes, next reveal. Call first. `include_specs` returns every slide as JSON — the raw material for fleshing a live outline out into a full presentation. |
-| `advance` | Reveal the next element (or move to the next slide); returns what appeared. |
-| `back` | Hide the last reveal or return to the previous slide. |
-| `goto_slide` | Jump to a slide by number or id, optionally pre-revealed. |
-| `add_slide` | Create a slide from a JSON spec (layouts: title, bullets, split, code, fact, quote, diagram — diagrams are inline SVG with id-tagged regions). |
-| `update_slide` | Patch an existing slide; re-renders live if on screen. |
-| `remove_slide` | Delete a slide. |
-| `spotlight` | Dim the slide and emphasise one element for a few seconds. |
-| `zoom_to` | Prezi-style camera move onto one element — e.g. a diagram region by SVG id — then `reset` to pull back. |
-| `show_question` | Put an audience question on screen as a card while you answer it; `clear` dismisses. |
-| `set_theme` | Switch theme: midnight, paper, aurora. |
+| `get_deck` | Returns the outline, current position, notes and next reveal; optional full specs. |
+| `advance` | Reveals the next fragment or enters the next slide. |
+| `back` | Hides the last reveal or returns to the previous slide. |
+| `goto_slide` | Jumps to a slide by number or ID. |
+| `add_slide` | Creates a slide from a JSON spec. |
+| `update_slide` | Patches an existing slide. |
+| `remove_slide` | Deletes a slide. |
+| `spotlight` | Temporarily emphasises an element. |
+| `zoom_to` | Moves the camera onto an element or diagram region. |
+| `show_question` | Displays or clears an audience question. |
+| `set_theme` | Changes the visual theme. |
 
-The starter deck includes a transformer-encoder diagram: say *"now let's zoom into the attention head"* and the agent calls `zoom_to("attention")` — the attention formula is only legible once the camera is in.
+The v2 protocol replaces the always-on set with small mode-scoped bundles over one command bus. Compatibility wrappers can preserve these names during migration.
 
 ## Run it
 
-No build step, no dependencies:
+No build step is required for the current prototype:
 
 ```bash
 cd hackathon/agentdeck
-npx serve .        # or: python3 -m http.server 8080
+npx serve .
+# or
+python3 -m http.server 8080
 ```
 
-Then open the printed URL.
+Open the printed URL.
 
-- **With an agent:** open the page in the ChatGPT desktop app's in-app browser (WebMCP enabled), or Chrome with the WebMCP flag (`chrome://flags/#enable-webmcp-testing`) / origin trial. The header chip shows how many tools registered. Then say: *"Get the deck and present it to me."*
-- **Without an agent:** press `Console` and run any tool by hand with JSON args — the simulator drives the exact same handlers. Arrow keys also work.
+- **With a WebMCP-capable agent:** open the page in a supported in-app browser or an experimental WebMCP browser environment, then ask the agent to inspect and present the deck.
+- **Without WebMCP:** press `Console` and run the same handlers manually, or use the arrow keys.
 
 Deck edits persist in `localStorage`; `Reset` restores the starter deck.
 
-## Demo script (for the submission video)
+## Demonstration path
 
-1. Open the deck in the ChatGPT in-app browser; point at the "11 tools live" chip.
-2. Say "get the deck and present it to me" — let the agent narrate through the starter deck, reveals landing as it speaks (open the console panel so tool calls are visible).
-3. On the transformer slide: "zoom into the attention head" — the camera dives into the diagram and the formula becomes legible. Then "zoom back out".
-4. Mid-presentation, ask an off-script question ("what paper first showed this?") — the question appears on screen via `show_question`, and the agent answers by **creating a new slide live** (`add_slide` with `present: true`).
-5. Ask it to "make it feel warmer" → `set_theme paper`. Close on the "Try it" slide.
+The recommended demo proves one coherent idea rather than enumerating features:
 
-AgentDeck also works the other way around: **you** present while the agent listens and drives — revealing points, zooming, and posting audience questions as you speak. Tell it: "I'll present; follow along silently and keep the slides in sync with what I say."
+1. show why frozen slides conflict with live conversation;
+2. explain the human–agent–browser loop;
+3. reveal points while the console makes the calls visible;
+4. focus on the state/result loop;
+5. take a controlled audience question;
+6. create a relevant comparison slide live;
+7. return to the planned route and close.
 
-## Known constraints
+See the full [Demo Runbook](docs/DEMO_RUNBOOK.md).
 
-- WebMCP is experimental: it currently requires the ChatGPT desktop in-app browser or Chrome behind a flag/origin trial. The page detects availability and falls back cleanly (keyboard + simulator), so the app is fully demoable everywhere.
-- Voice-mode tool calling should be verified early on your own setup; the text-chat flow is the guaranteed path and the demo works in either.
-- The page registers via `navigator.modelContext.registerTool` and falls back to the older `provideContext` shape if that is what the browser exposes.
+## Design principles
+
+- One authoritative controller state.
+- One command bus for agent and human controls.
+- One explicit beat per audience-state transition.
+- Stable semantic IDs and separate deck/session revisions.
+- Complete deltas and post-state observations after every action.
+- Retry-safe, atomic and reversible mutation.
+- Progressive disclosure rather than repeated full-deck dumps.
+- Reviewed accretion rather than silent self-modification.
+- Transport-neutral core with WebMCP as an adapter.
+- A working static fallback throughout migration.
+
+## Immediate implementation priority
+
+The first code slice is deliberately narrow:
+
+1. register through the current `document.modelContext` surface and await results;
+2. wrap all controls in one minimal controller/command path;
+3. introduce a structured result envelope;
+4. report complete slide-entry content;
+5. test registration, keyboard parity, retry safety and DOM/result equivalence.
+
+See [ROADMAP.md](docs/ROADMAP.md) for the full sequence.
