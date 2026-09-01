@@ -18,7 +18,7 @@ This is the compact decision ledger for AgentDeck. Update it when a change would
 
 **Rejected:** Keeping keyboard handlers as a separate fast path.
 
-## AD-003 — Deck artifact and live session are separate planes
+## AD-003 — Deck artefact and live session are separate planes
 
 **Decision:** Authored content and live cursor/focus/question state use separate stores and revisions.
 
@@ -52,7 +52,7 @@ This is the compact decision ledger for AgentDeck. Update it when a change would
 
 ## AD-007 — Structured result envelope
 
-**Decision:** Every command returns versions, event, delta, current observation, narration cue and recovery information in one stable envelope.
+**Decision:** Every command returns revisions, event, delta, current observation, narration cue, epistemic status and recovery information in one stable envelope.
 
 **Why:** Free prose is hard to reconcile, diff and replay, and usually forces another observation call.
 
@@ -92,7 +92,7 @@ This is the compact decision ledger for AgentDeck. Update it when a change would
 
 ## AD-012 — Progressive disclosure is the default read path
 
-**Decision:** `deck.observe` returns current-neighbourhood state by default; full artifact and raw assets are opt-in and bounded.
+**Decision:** `deck.observe` returns current-neighbourhood state by default; full artefact and raw assets are opt-in and bounded.
 
 **Why:** Most presentation decisions need only current, previous and next context. Full dumps waste tokens and crowd out live reasoning.
 
@@ -121,3 +121,27 @@ This is the compact decision ledger for AgentDeck. Update it when a change would
 **Why:** Demonstrability and recovery are product features. A framework rewrite would add risk without solving the control-plane problems.
 
 **Rejected:** Rebuilding the prototype in React before protocol hardening.
+
+## AD-016 — Visibility and delivery are separate facts
+
+**Decision:** The session records both the beat visible on screen and whether its narration was delivered, skipped, partial, pending or unknown.
+
+**Why:** A tool result appears before the agent speaks. Equating visual commitment with audience delivery makes interruption recovery inaccurate.
+
+**Rejected:** Assuming every successful `advance` means the audience has already heard the associated narration.
+
+## AD-017 — Delivery acknowledgement piggybacks on the next command
+
+**Decision:** A presentation command may acknowledge the previous beat while committing the next transition.
+
+**Why:** This preserves accurate delivery state without doubling the number of ordinary presentation calls. If interrupted, no later command arrives and the previous beat remains visibly pending.
+
+**Rejected:** Requiring a separate acknowledgement call after every narration, and silently inferring delivery from elapsed time.
+
+## AD-018 — Live-generated slides are staged session material
+
+**Decision:** A generated slide used in a live answer is session-scoped, provisional and linked to a learning candidate. It can be presented and returned from without incrementing deck revision.
+
+**Why:** Live adaptation is valuable, but it is not equivalent to reviewed authorship. The system needs both spontaneity and epistemic custody.
+
+**Rejected:** Using durable `add_slide` as the default live-Q&A operation, or forbidding live slides until they have completed an authoring review.

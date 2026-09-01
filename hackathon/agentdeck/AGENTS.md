@@ -23,12 +23,14 @@ Preserve these across every change:
 
 - **One transition, two projections.** The DOM and the agent result must be produced from the same committed state transition.
 - **One command bus.** Agent tools, keyboard controls, console controls and future remote controls all dispatch through the same controller.
+- **Visibility is not delivery.** A visible beat begins pending; delivery is acknowledged or classified separately.
 - **No invisible semantic changes.** Presentation state never changes because an unreported timer expired.
 - **Stable semantic references.** Durable operations target deck, route, slide, beat and element IDs. Ordinal slide numbers are display conveniences only.
 - **Version every mutable plane.** Deck revisions and session revisions are separate and returned after every command.
 - **Retry-safe commands.** Mutating commands carry an idempotency key and expected revision.
 - **Delta by default.** Return the current neighbourhood and changed state, not the whole deck, unless full detail is requested.
 - **Entry is a beat.** Everything visible when a slide appears is represented and returned explicitly.
+- **Live adaptation is provisional.** Generated session slides do not alter deck revision and retain origin, evidence status and a candidate ID.
 - **Reversible by default.** Durable edits are atomic, previewable and checkpointed.
 - **Accretion is reviewed.** Live questions, corrections and generated slides become candidates; they do not silently rewrite the canonical deck.
 - **Provenance survives presentation.** Claims and generated material retain source and origin references.
@@ -41,6 +43,8 @@ Preserve these across every change:
 - Add a roadmap acceptance criterion for every new runtime capability.
 - Route all state changes through the reducer/controller; do not mutate `Deck` state directly from UI handlers.
 - Keep authored deck state separate from ephemeral session state.
+- Do not mark a beat delivered merely because it is visible or because time passed.
+- Treat live-generated factual content as provisional until evidence or explicit author confirmation permits promotion.
 - Prefer structured semantic models over opaque markup. Raw SVG is an escape hatch, not the long-term diagram model.
 - Tool descriptions should state when to use the tool, what changes, what does not change and what result the agent receives.
 - Errors must have stable machine-readable codes and a concise recovery action.
@@ -54,9 +58,11 @@ Before claiming a behaviour works, verify:
 2. the controller emits exactly one committed event;
 3. the DOM reflects that event;
 4. the tool result reports the same appeared, disappeared and focused elements;
-5. a duplicate idempotency key does not repeat the effect;
-6. a stale expected revision fails without mutation;
-7. refresh/replay reconstructs the same state;
-8. keyboard and WebMCP paths produce equivalent events.
+5. visual and delivery state remain distinct under interruption;
+6. a duplicate idempotency key does not repeat the effect;
+7. a stale expected revision fails without mutation;
+8. refresh/replay reconstructs the same state;
+9. keyboard and WebMCP paths produce equivalent events;
+10. provisional staging does not increment deck revision.
 
 A passing syntax check is not sufficient for a presentation-state change.
